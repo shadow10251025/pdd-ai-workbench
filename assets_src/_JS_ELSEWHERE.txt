@@ -1,0 +1,31 @@
+
+    (() => {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const anchor = document.querySelector('input[placeholder*="选择或输入主色"]')
+                    || document.querySelector('input[placeholder*="自定义尺码"]');
+        const cands = [];
+        if (anchor) {
+            const r = anchor.getBoundingClientRect();
+            cands.push([r.x - 140, r.y + r.height / 2]);   // 左侧 label 空白
+            cands.push([r.x + r.width / 2, r.y + 240]);    // 下方空白
+            cands.push([r.x + r.width / 2, r.y + 180]);
+        }
+        cands.push([vw - 60, vh - 40]);
+        cands.push([vw / 2, vh - 40]);
+        const bad = (e) => {
+            if (!e) return true;
+            const t = e.tagName;
+            if (t === 'INPUT' || t === 'BUTTON' || t === 'A' || t === 'SVG' || t === 'PATH' || t === 'LABEL' || t === 'IMG') return true;
+            const c = (e.className || '').toString().toLowerCase();
+            if (/btn|button|upload|checkbox|radio|close|icon|table|modal|popup|select|switch/.test(c)) return true;
+            return false;
+        };
+        for (const [x0, y0] of cands) {
+            const x = Math.round(x0), y = Math.round(y0);
+            if (x < 4 || y < 4 || x > vw - 4 || y > vh - 4) continue;
+            const e = document.elementFromPoint(x, y);
+            if (!bad(e)) return JSON.stringify({x: x, y: y});
+        }
+        return null;
+    })()
+    

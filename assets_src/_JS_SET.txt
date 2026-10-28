@@ -1,0 +1,13 @@
+
+    (() => {
+        const PH = __PH__;
+        const V = __V__;
+        const inps = Array.from(document.querySelectorAll("input")).filter(i => (i.placeholder || "").indexOf(PH) >= 0);
+        const inp = inps.find(i => (i.value || "").trim() === "") || inps[inps.length - 1];
+        if (!inp) return "NO_INPUT";
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(inp, V);
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        return "OK";
+    })()
+    

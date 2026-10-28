@@ -1,0 +1,23 @@
+(() => {
+        const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+        const cands = [];
+        for (const el of document.querySelectorAll("button, a, span, div")) {
+            const t = (el.innerText || "").trim();
+            if (!t.includes("导出当前规格数据")) continue;
+            if (!vis(el)) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 20 || r.height < 12) continue;
+            cands.push({el: el, tag: el.tagName, area: r.width * r.height,
+                        box: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]});
+        }
+        if (!cands.length) return JSON.stringify({ok: false});
+        const btn = cands.filter(c => c.tag === "BUTTON" || c.tag === "A");
+        const pool = btn.length ? btn : cands;
+        pool.sort((a, b) => a.area - b.area);
+        const pick = pool[0];
+        window.__ocl_export_btn = pick.el;      // 留给「真鼠标点不到」时兜底
+        return JSON.stringify({ok: true, tag: pick.tag, box: pick.box, n: cands.length,
+            cls: (pick.el.className || "").toString().slice(0, 50),
+            vw: window.innerWidth, vh: window.innerHeight});
+    })()

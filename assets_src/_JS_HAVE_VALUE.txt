@@ -1,0 +1,18 @@
+
+    (() => {
+        const PH = __PH__;
+        const V = __V__;
+        const norm = (s) => (s || "").replace(/\s+/g, "");
+        const NV = norm(V);
+        if (!NV) return 0;
+        if (Array.from(document.querySelectorAll("input"))
+                .some(i => (i.placeholder || "").indexOf(PH) >= 0 && norm(i.value) === NV)) return 1;
+        let n = 0;
+        for (const t of document.querySelectorAll("table")) {
+            for (const c of t.querySelectorAll("td,th")) {
+                if (norm(c.innerText) === NV) n++;
+            }
+        }
+        return n;
+    })()
+    

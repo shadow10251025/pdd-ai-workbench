@@ -1,0 +1,14 @@
+
+            (() => {
+                for (let el of document.querySelectorAll("button")) {
+                    let text = (el.innerText || "").trim();
+                    let rect = el.getBoundingClientRect();
+                    if (text.includes("下一步") && rect.height > 0) {
+                        el.scrollIntoView({block:'center'});
+                        el.click();
+                        return "CLICKED";
+                    }
+                }
+                return "NOT_FOUND";
+            })()
+            

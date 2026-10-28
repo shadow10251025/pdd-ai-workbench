@@ -1,0 +1,16 @@
+
+    (() => {
+        // 新版界面：颜色分类/尺码固定大类，「选择或输入主色」输入框
+        let hasNew = Array.from(document.querySelectorAll("input")).some(i => (i.placeholder || "").indexOf("选择或输入主色") >= 0);
+        if (hasNew) return "NEW";
+        let btns = document.querySelectorAll("button");
+        for (let b of btns) {
+            let t = (b.innerText || "").trim();
+            let rect = b.getBoundingClientRect();
+            if (t.indexOf("添加规格类型") >= 0 && rect.height > 0 && !b.disabled) {
+                return "MANUAL";
+            }
+        }
+        return "UNKNOWN";
+    })()
+    

@@ -1,0 +1,24 @@
+(() => {
+    var cont = document.querySelector('[class*=quick-decoration-container-v2]');
+    if (!cont) return JSON.stringify({ok: false});
+    var cells = [].slice.call(cont.querySelectorAll('[class*=ImageWithRemark_v2_imageContainer]'));
+    var good = 0, bad = 0, pending = 0;
+    for (var i = 0; i < cells.length; i++) {
+        var c = cells[i];
+        var scope = c.parentElement || c;
+        var red = !!scope.querySelector('[class*=ImageWithRemark_v2_red]');
+        var bc = '';
+        try { bc = getComputedStyle(c).borderColor.replace(/\s+/g, ''); } catch (e) {}
+        var isBad = red || bc === 'rgb(255,84,84)';
+        var img = c.querySelector('img');
+        var src = img ? (img.getAttribute('src') || '') : '';
+        var real = !!src && src.indexOf('data:') !== 0;
+        if (isBad) bad++;
+        else if (real) good++;
+        else pending++;
+    }
+    var num = document.querySelector('[class*=quick-decoration-container-v2] [class*=quick_decoration_v2_num]');
+    return JSON.stringify({ok: true, good: good, bad: bad, pending: pending,
+                           total: cells.length,
+                           counter: num ? (num.innerText || '').replace(/\s+/g, '') : ''});
+})()

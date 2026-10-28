@@ -1,0 +1,17 @@
+(() => {
+            const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+                return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+            const uniq = (a) => Array.from(new Set(a));
+            const btns = [], toasts = [];
+            for (const el of document.querySelectorAll("button, a, span, div")) {
+                const t = (el.innerText || "").trim();
+                if (t && t.length < 30 && t.includes("导出") && vis(el)) btns.push(t);
+            }
+            for (const e of document.querySelectorAll("[class*=toast],[class*=Toast],[class*=message],[class*=Message],[class*=tip],[class*=Tip]")) {
+                if (!vis(e)) continue;
+                const t = (e.innerText || "").trim();
+                if (t && t.length < 100) toasts.push(t);
+            }
+            return JSON.stringify({_m: "__ocl_export_state",
+                                   btns: uniq(btns).slice(0, 6), toasts: uniq(toasts).slice(0, 6)});
+        })()

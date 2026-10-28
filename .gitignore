@@ -1,0 +1,52 @@
+# Credentials and local environments
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+keygen/
+assets/
+packs/
+
+# Runtime data, browser login profiles and local acceptance output
+data/
+browser_data*/
+build_browsers/
+validation/
+.release_previous/
+*.db
+*.db-*
+*.sqlite*
+*.log
+logs/
+
+# Dependencies and build outputs
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+node_modules/
+build/
+dist/
+*.zip
+*.exe
+*.spec
+
+# One-off probes and editor state
+_probe_*
+_live_*
+_patch_*
+_tmp_*
+*.bak_extract
+_cracked/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+nul
+
+# assets_src/ intentionally belongs in the private developer repository:
+# these are editable browser scripts, never production signing credentials.

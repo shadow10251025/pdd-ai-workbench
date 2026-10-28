@@ -1,0 +1,19 @@
+
+    (() => {
+        const PH = __PH__;
+        const inps = Array.from(document.querySelectorAll("input")).filter(i => (i.placeholder || "").indexOf(PH) >= 0);
+        const inp = inps[__I__];
+        if (!inp) return JSON.stringify({st: "NO_INPUT"});
+        inp.scrollIntoView({block: 'center', inline: 'center'});
+        inp.focus();
+        const r = inp.getBoundingClientRect();
+        const x = Math.round(r.x + r.width / 2), y = Math.round(r.y + r.height / 2);
+        if (document.activeElement !== inp) return JSON.stringify({st: "FOCUS_FAIL", x: x, y: y});
+        const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        if (top !== inp) {
+            const c = top ? top.tagName + "." + (top.className || "").toString().slice(0, 45) : "null";
+            return JSON.stringify({st: "BLOCKED:" + c, x: x, y: y});
+        }
+        return JSON.stringify({st: "OK", x: x, y: y});
+    })()
+    

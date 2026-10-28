@@ -1,0 +1,39 @@
+
+    (() => {
+        try {
+            var trs = Array.from(document.querySelectorAll('tr'));
+            // 找表头行：含「预览图」列的那一行
+            var headerIdx = -1;
+            for (var i = 0; i < trs.length; i++) {
+                var texts = Array.from(trs[i].querySelectorAll('td, th')).map(function(c){ return (c.innerText||'').trim(); });
+                if (texts.some(function(t){ return t.indexOf('预览图') >= 0; })) { headerIdx = i; break; }
+            }
+            if (headerIdx < 0) return JSON.stringify([]);
+            var hdr = Array.from(trs[headerIdx].querySelectorAll('td, th')).map(function(c){ return (c.innerText||'').trim(); });
+            var fullCells = hdr.length;
+            var colorCol = hdr.findIndex(function(t){ return t.indexOf('颜色') >= 0; });
+            var sizeCol = hdr.findIndex(function(t){ return /尺码|尺寸|大小|码数/.test(t); });
+            var cc = colorCol >= 0 ? colorCol : 0;
+            var sc = sizeCol >= 0 ? sizeCol : 1;
+            var rows = [];
+            var cur = '';
+            for (var i = headerIdx + 1; i < trs.length; i++) {
+                var cells = trs[i].querySelectorAll('td');
+                if (cells.length < 2) continue;
+                // 颜色列 rowspan 合并：同一颜色的后续尺码行里，颜色 <td> 被「移除」（不是留空），
+                // 导致其后的单元格整体左移一位。所以用「缺失的单元格数」来校正列下标：
+                //   delta=0 → 该行有颜色单元格（颜色在 cc，尺码在 sc）
+                //   delta=1 → 颜色单元格被 rowspan 吞掉（尺码左移到 sc-1）
+                var delta = fullCells - cells.length;
+                if (delta < 0) delta = 0;
+                var color = (delta === 0 && cells[cc] ? (cells[cc].innerText||'').trim() : '');
+                var sizeIdx = sc - delta;
+                var size = (cells[sizeIdx] ? (cells[sizeIdx].innerText||'').trim() : '');
+                if (color) cur = color;      // 该行有颜色 → 更新当前颜色
+                if (!size) continue;         // 没有尺码就不是 SKU 行
+                rows.push(cur);
+            }
+            return JSON.stringify(rows);
+        } catch(e) { return JSON.stringify([]); }
+    })()
+    

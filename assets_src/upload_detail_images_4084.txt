@@ -1,0 +1,14 @@
+(() => {
+            let inp = document.querySelector('input[data-tracking-click-viewid="detail_img_localfile_upload"]');
+            if (inp) {
+                inp.style.position = '';
+                inp.style.top = '';
+                inp.style.left = '';
+                inp.style.width = '';
+                inp.style.height = '';
+                inp.style.opacity = '';
+                inp.style.zIndex = '';
+                inp.style.visibility = '';
+                inp.style.pointerEvents = '';
+            }
+        })()

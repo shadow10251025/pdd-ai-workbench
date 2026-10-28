@@ -1,0 +1,14 @@
+
+    var trs = Array.from(document.querySelectorAll('tr'));
+    var headerIdx = -1;
+    for (var i = 0; i < trs.length; i++) {
+        var texts = Array.from(trs[i].querySelectorAll('td, th')).map(function(c){ return (c.innerText||'').trim(); });
+        if (texts.some(function(t){ return t.indexOf('预览图') >= 0; })) { headerIdx = i; break; }
+    }
+    if (headerIdx < 0) return JSON.stringify(null);
+    var hdr = Array.from(trs[headerIdx].querySelectorAll('td, th')).map(function(c){ return (c.innerText||'').trim(); });
+    var fullCells = hdr.length;
+    var colorCol = hdr.findIndex(function(t){ return t.indexOf('颜色') >= 0; });
+    var sizeCol = hdr.findIndex(function(t){ return /尺码|尺寸|大小|码数/.test(t); });
+    var cc = colorCol >= 0 ? colorCol : 0;
+    var sc = sizeCol >= 0 ? sizeCol : 1;

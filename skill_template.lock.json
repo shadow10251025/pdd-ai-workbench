@@ -1,0 +1,32 @@
+{
+  "upstream_commit": "e7aa1996b962d4121b62d34199ed57234f8cf41a",
+  "template_sha256": "19e699ae7f4759aa854ea797cd51b990a0f02f3ad5c83cdb40aa041c268a4274",
+  "installed_template_count": 25,
+  "files": {
+    "01-hero-image.json": "d7850f61fefd57cd254e57a6a91c405d3146d86e3336bbd2aa47e49dd1c8e6a7",
+    "02-lifestyle-scene.json": "3884056b36b4bd8dd11eb32ee33e634f3f6258ad8bf9f6bf1e6d8f63a00d417e",
+    "03-flat-lay.json": "7576403ef9a82bc323afd10aea9ddb3a1c7dacf4f93077950082eec115a99457",
+    "04-detail-macro.json": "a3121a0430262a1c4b5bf9ea03179c588255212948f498c15124b371204140b9",
+    "05-poster-banner.json": "ea3012598cd55670710d4ea2b72ba678b92c6aa7842bad77ff4835656ec6e78a",
+    "06-social-media.json": "e2a3aad6036ada0f251730ff1e5a87212c7e041693dad5ba2d5d4be9f53a2209",
+    "07-ugc-style.json": "ae46fa51c70bc95cbb66a01da3f3154c4109f69f96a025b574846642cb9e901f",
+    "08-model-showcase.json": "a1697c690151bf9095437e618c8077d727eecc1eecddcf29ae6aa8c9c62ff677",
+    "09-before-after.json": "37f7ea3695d57ea30d6fbcb396e732973336d97417675dc62ee2bd4c5a883ead",
+    "10-packaging.json": "17a11fadc25921e2806943a94b083955b0a6ffa767fcf66cc1577724b24867dc",
+    "11-infographic.json": "94ff540b8e03303f55ee0fc332b670e2bd210e97dc06da8e782585948b2d70be",
+    "12-creative-concept.json": "712d91e645d858220b48988322aa0aecb158e1cce6724ea72bdc67c01bcbdc26",
+    "13-size-spec.json": "14a21b95f69f4ecd46ad19e0acd9df16cfe59b65ce32c2ab129e572b0c91aa8a",
+    "14-multi-product.json": "11b329a915656d7153685b7a535c0e99d482cbc5c12514f7750cb169e577358e",
+    "15-livestream.json": "4b4d30db560857ad991888012888d56bc6a18365a6b4c2d80c4478e309dcf2b0",
+    "16-try-on-virtual.json": "fc48de1ca577bd78087ee03cde23316df664390254cac9694f29bc769f25c444",
+    "17-exploded-view.json": "f2d68480d17eca6ccf31f87e68e1739e242ab0cd2499899aa195d808772e31b7",
+    "18-ghost-mannequin.json": "8a1bdb79e27a784b2d7f6dab2f01898a25017688953378c57c3e450ae1b17590",
+    "19-multi-angle-grid.json": "3d0a3491181b18e88d277e10b77e124c559d0ccec294a5cf69416b30bbf4e4c9",
+    "20-magazine-editorial.json": "ac2d545a6beb60b9f8a2e308bb82ff3fd34e1e4cbd737cc3a6bc9f24154d85bd",
+    "21-seasonal-campaign.json": "7a17dc8cc64913f2566e1f23dfb896ffe6f5f8fb566dd0645dd38a034d35e856",
+    "22-luxury-atmospherics.json": "e36ca1a4c7eff4b9f530dc33dc1ea457362b02fd98789848e1a619083868576d",
+    "23-device-mockup.json": "cc0b3f1ee0d80ec7ce00a0ded0ed44cf90657e2ea12c1cd0a23a965a39660a6d",
+    "24-storefront.json": "9c747c7ee6b7fd04f216946b0f57b7ffe975fa37dd997b7d1581290431c20f46",
+    "25-sports-campaign.json": "5b35105c6d142a614fbcf781d5648c2e308ac71d4c758452483916bd302dad68"
+  }
+}

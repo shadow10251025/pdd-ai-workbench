@@ -1,0 +1,54 @@
+
+        var HAVE = __HAVE__;
+        // Python 侧已经试满 3 次的行（颜色|尺码）由外面传进来，别再挑它。
+        // 原先靠 DOM 上的 data-pdd-upload-skip 记，但 PDD 重渲染会把这个属性冲掉，
+        // 于是同一行被反复挑回来、被重复数成「已经 3 行传不上」而整体收工。
+        var SKIP = __SKIP__;
+        var TAG = __TAG__;
+        var norm = function(s) { return (s || '').replace(/\s+/g, ''); };
+        var have = {};
+        HAVE.forEach(function(c) { have[norm(c)] = true; });
+        var skip = {};
+        SKIP.forEach(function(k) { skip[norm(k)] = true; });
+        // 与 Python 侧 lookup() 同一套规则：先去空白精确匹配，再退一步做子串匹配
+        var matchHave = function(color) {
+            var c = norm(color);
+            if (!c) return false;
+            if (have[c]) return true;
+            for (var k in have) { if (k && (k.indexOf(c) >= 0 || c.indexOf(k) >= 0)) return true; }
+            return false;
+        };
+        var cur = '';
+        var sawColor = false;
+        var unknown = 0;      // 视口顶部这一段（颜色单元格被虚拟滚动截掉）颜色读不准的待传行
+        var miss = [];        // 颜色读到了、但本地没有对应预览图的待传行
+        var picked = [];      // 这一轮挑中的行（还缺图、颜色能匹配到本地图），按 DOM 顺序
+        for (var i = headerIdx + 1; i < trs.length; i++) {
+            var cells = trs[i].querySelectorAll('td');
+            if (cells.length < 2) continue;
+            // 颜色列 rowspan 合并：同色后续尺码行的颜色 <td> 被移除，后面的单元格整体左移
+            var delta = fullCells - cells.length;
+            if (delta < 0) delta = 0;
+            var colorCell = (delta === 0 && cells[cc]) ? (cells[cc].innerText || '').trim() : '';
+            if (colorCell) { cur = colorCell; sawColor = true; }
+            if (!trs[i].querySelector('input[type=file][accept*=image]')) continue;
+            var sizeCell = cells[sc - delta];
+            var size = sizeCell ? (sizeCell.innerText || '').trim() : '';
+            if (skip[norm(cur) + '|' + norm(size)]) continue;
+            if (!sawColor) {
+                unknown++;
+            } else if (!matchHave(cur)) {
+                miss.push((cur + ' ' + size).trim());
+            }
+            if (sawColor && matchHave(cur)) {
+                trs[i].setAttribute('data-pdd-upload-target', TAG + '-' + picked.length);
+                picked.push({c: cur, s: size});
+            }
+        }
+        return JSON.stringify({
+            ok: picked.length > 0, rows: picked, miss: miss, unknown: unknown,
+            // 这个视口是从颜色组中间截开的，上面可能还有能传的行 → 让 Python 往上滚一点再试
+            needScroll: (picked.length === 0 && unknown > 0)
+        });
+    } catch (e) { return JSON.stringify({err: String(e)}); }
+})()

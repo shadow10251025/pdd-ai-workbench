@@ -1,0 +1,49 @@
+
+        const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+        const T = (e) => (e.innerText || '').replace(/\s+/g, '');
+        const area = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height; };
+        // 弹窗盖在视口上；被误认的页面模块常常在屏幕外（实测 y=2497、视口才 861 高），
+        // 所以要求它跟视口真有交集
+        const onScreen = (e) => { const r = e.getBoundingClientRect();
+            return r.bottom > 0 && r.top < window.innerHeight + 150
+                && r.right > 0 && r.left < window.innerWidth; };
+        // 只认弹窗自己的文字当标记（页面上别处没有这几句）：
+        //   「导入规格数据」「导出当前规格数据」= 还没挂文件时那个弹窗的第 1/2 步
+        //   「确认编辑项」「返回重新上传」    = 文件被拼多多读完之后，弹窗内容换成一张
+        //     预览表，底部「返回重新上传 | 确认编辑 | 取消」，**必须点确认编辑才生效**
+        // 标题文字「Excel批量编辑规格」不能当标记：页面上用来打开弹窗的那个链接就是这几个字，
+        // 弹窗关了它还在 —— 线上就是这么把商品页自己的规格模块当成「弹窗还开着」的。
+        const marked = (e) => { const t = T(e);
+            return t.indexOf('导入规格数据') >= 0 || t.indexOf('导出当前规格数据') >= 0
+                || t.indexOf('确认编辑项') >= 0 || t.indexOf('返回重新上传') >= 0; };
+        // 只在弹窗里面（含它的近几层祖先，防止只取到标题那一行）按文字找按钮。
+        // 不能满页面找：页面上有同名按钮，旧代码就是点到页面别处那个，一次都没提交成功。
+        // 也别用「祖先盖住大半个视口」当判据 —— 页面自己的大容器（规格模块）也满足那个条件。
+        const findByButton = (label) => {
+            const roots = [];
+            let p = dlg;
+            for (let i = 0; i < 3 && p && p !== document.body && p !== document.documentElement;
+                 i++, p = p.parentElement) roots.push(p);
+            for (const root of roots) {
+                for (const b of root.querySelectorAll('button')) {
+                    if ((b.innerText || '').trim() !== label) continue;
+                    if (!vis(b) || !onScreen(b)) continue;
+                    return b;
+                }
+            }
+            return null; };
+        const boxes = Array.from(document.querySelectorAll('div'))
+            .filter(e => vis(e) && onScreen(e) && marked(e))
+            .filter(e => { const r = e.getBoundingClientRect(); return r.width >= 280 && r.height >= 120; })
+            .sort((a, b) => area(a) - area(b));
+        let dlg = boxes[0] || null;
+        // 取到的最内层盒子可能只是标题那一行，往外扩到弹窗本体。
+        // 但别扩到遮罩上：遮罩≈整个视口，扩上去算出来的「弹窗外面」就还在弹窗里。
+        while (dlg && dlg.parentElement && dlg.parentElement !== document.body
+               && dlg.parentElement !== document.documentElement) {
+            const p = dlg.parentElement, pr = p.getBoundingClientRect();
+            if (area(p) >= area(dlg) * 2.2) break;
+            if (pr.width >= window.innerWidth * 0.99 || pr.height >= window.innerHeight * 0.99) break;
+            dlg = p;
+        }

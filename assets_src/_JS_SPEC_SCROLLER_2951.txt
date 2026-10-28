@@ -1,0 +1,12 @@
+
+        var anyTr = trs[headerIdx + 1];
+        var el = anyTr ? anyTr.parentElement : null;
+        while (el) {
+            if (el.scrollHeight > el.clientHeight + 20) {
+                return JSON.stringify({ top: el.scrollTop, height: el.scrollHeight, client: el.clientHeight });
+            }
+            el = el.parentElement;
+        }
+        return JSON.stringify(null);
+    } catch(e) { return JSON.stringify(null); }
+})()

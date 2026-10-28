@@ -1,0 +1,18 @@
+(() => {
+    var cont = document.querySelector('[class*=quick-decoration-container-v2]');
+    if (!cont) return 'no-container';
+    var cells = [].slice.call(cont.querySelectorAll('[class*=ImageWithRemark_v2_imageContainer]'));
+    for (var i = cells.length - 1; i >= 0; i--) {
+        var c = cells[i], scope = c.parentElement || c;
+        var red = !!scope.querySelector('[class*=ImageWithRemark_v2_red]');
+        var bc = '';
+        try { bc = getComputedStyle(c).borderColor.replace(/\s+/g, ''); } catch (e) {}
+        if (!red && bc !== 'rgb(255,84,84)') continue;
+        var del = scope.querySelector('[class*=DeleteIcon_v2_delete]')
+                  || c.querySelector('[class*=DeleteIcon_v2_delete]');
+        if (!del) return 'no-delete-button';
+        del.click();
+        return 'clicked';
+    }
+    return 'none-failed';
+})()

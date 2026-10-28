@@ -1,0 +1,22 @@
+
+        if (!dlg) return 'NONE';
+        const scope = [dlg];
+        if (dlg.parentElement && area(dlg.parentElement) < area(dlg) * 2.5) scope.push(dlg.parentElement);
+        const els = [];
+        scope.forEach(s => els.push(...Array.from(
+            s.querySelectorAll('button,span,i,[class*=close],[class*=Close]')).filter(vis)));
+        const r = dlg.getBoundingClientRect();
+        let x = els.find(e => /close/i.test(String(e.className) + (e.getAttribute('data-testid') || '')
+                                                    + (e.getAttribute('aria-label') || '')));
+        if (!x) {
+            x = els.find(e => {
+                const b = e.getBoundingClientRect();
+                const inCorner = b.x + b.width / 2 > r.x + r.width * 0.6
+                              && b.y + b.height / 2 < r.y + r.height * 0.35;
+                return inCorner && b.width > 8 && b.width < 48 && b.height > 8 && b.height < 48;
+            });
+        }
+        if (!x) return 'NO_X';
+        x.click();
+        return 'CLICKED_X';
+    })()

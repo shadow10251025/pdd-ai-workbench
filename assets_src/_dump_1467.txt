@@ -1,0 +1,12 @@
+
+            (() => {
+                const grab = (ph) => Array.from(document.querySelectorAll("input"))
+                    .filter(i => (i.placeholder || "").indexOf(ph) >= 0)
+                    .map(i => i.value);
+                return JSON.stringify({
+                    colors: grab("选择或输入主色"),
+                    sizes: grab("自定义尺码"),
+                    containers: document.querySelectorAll(".custom-input-container").length
+                });
+            })()
+            

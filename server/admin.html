@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>授权管理后台</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f6f8; color: #333; }
+        .wrap { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+        h1 { font-size: 22px; margin-bottom: 20px; }
+        .card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .card h2 { font-size: 16px; margin-bottom: 14px; }
+        label { display: inline-block; font-size: 13px; color: #666; margin-right: 6px; }
+        input, button { font-size: 14px; padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; }
+        input:focus { outline: none; border-color: #e02e24; }
+        button { cursor: pointer; background: #e02e24; color: #fff; border: none; }
+        button:hover { opacity: .9; }
+        button.ghost { background: #fff; color: #e02e24; border: 1px solid #e02e24; }
+        button.ghost:hover { background: #fdf0ef; }
+        .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+        .row input[type=number] { width: 70px; }
+        .codes { background: #fdf3f2; border: 1px dashed #e02e24; border-radius: 8px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 15px; line-height: 2; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+        th { color: #999; font-weight: 600; white-space: nowrap; }
+        .code { font-family: monospace; font-weight: 600; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+        .tag.active { background: #e8f6ee; color: #1a9b4f; }
+        .tag.revoked { background: #fbeaea; color: #c0392b; }
+        .tag.expired { background: #fef3e0; color: #c77d00; }
+        .machine { font-family: monospace; font-size: 12px; color: #888; }
+        .actions button { font-size: 12px; padding: 4px 8px; margin-right: 4px; }
+        .msg { margin-top: 10px; font-size: 13px; }
+        .msg.err { color: #c0392b; }
+        .msg.ok { color: #1a9b4f; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .hidden { display: none; }
+        .hint { font-size: 12px; color: #999; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="topbar">
+        <h1>🔐 授权管理后台</h1>
+        <button id="logoutBtn" class="ghost hidden">退出登录</button>
+    </div>
+
+    <!-- 登录 -->
+    <div class="card" id="loginCard">
+        <h2>管理员登录</h2>
+        <div class="row">
+            <input type="password" id="password" placeholder="管理员密码" style="width:220px;">
+            <button onclick="login()">登录</button>
+        </div>
+        <div class="msg" id="loginMsg"></div>
+    </div>
+
+    <!-- 主面板 -->
+    <div id="mainPanel" class="hidden">
+        <div class="card">
+            <h2>➕ 生成激活码</h2>
+            <div class="row">
+                <label>时长(月)</label>
+                <input type="number" id="months" value="1" min="1" max="60">
+                <label>数量</label>
+                <input type="number" id="count" value="1" min="1" max="100">
+                <button onclick="genCodes()">生成</button>
+            </div>
+            <div class="codes hidden" id="genResult"></div>
+        </div>
+
+        <div class="card">
+            <h2>📋 授权码列表</h2>
+            <div class="hint">状态：🟢 active 正常 / 🔴 revoked 已吊销 / 🟡 到期（expiry 早于今天）</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>激活码</th><th>到期日</th><th>绑定机器</th><th>状态</th><th>激活时间</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="licensesBody"></tbody>
+            </table>
+            <div class="msg" id="listMsg"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let token = localStorage.getItem('admin_token') || '';
+
+function api(path, body, method) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const opts = { method: method || 'POST', headers };
+    if (body !== undefined && body !== null) opts.body = JSON.stringify(body);
+    return fetch(path, opts).then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+        return data;
+    });
+}
+
+async function login() {
+    const password = document.getElementById('password').value;
+    const msg = document.getElementById('loginMsg');
+    msg.className = 'msg';
+    msg.textContent = '登录中...';
+    try {
+        const r = await fetch('/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || '登录失败');
+        token = data.token;
+        localStorage.setItem('admin_token', token);
+        showMain();
+    } catch (e) {
+        msg.className = 'msg err';
+        msg.textContent = e.message;
+    }
+}
+
+async function logout() {
+    if (token) {
+        try { await fetch('/admin/logout', {method:'POST', headers:{Authorization:'Bearer '+token}}); }
+        catch (_) { return alert('服务端会话撤销失败，请恢复连接后重试'); }
+    }
+    token = '';
+    localStorage.removeItem('admin_token');
+    document.getElementById('loginCard').classList.remove('hidden');
+    document.getElementById('mainPanel').classList.add('hidden');
+    document.getElementById('logoutBtn').classList.add('hidden');
+}
+
+function showMain() {
+    document.getElementById('loginCard').classList.add('hidden');
+    document.getElementById('mainPanel').classList.remove('hidden');
+    document.getElementById('logoutBtn').classList.remove('hidden');
+    loadLicenses();
+}
+
+async function genCodes() {
+    const months = parseInt(document.getElementById('months').value) || 1;
+    const count = parseInt(document.getElementById('count').value) || 1;
+    const box = document.getElementById('genResult');
+    try {
+        const data = await api('/admin/gen_codes', { months, count });
+        const codes = data.codes.map(c => `${c.code}（到期 ${c.expiry}）`).join('\n');
+        box.textContent = codes;
+        box.classList.remove('hidden');
+        loadLicenses();
+    } catch (e) {
+        box.textContent = '生成失败: ' + e.message;
+        box.classList.remove('hidden');
+    }
+}
+
+async function loadLicenses() {
+    const tbody = document.getElementById('licensesBody');
+    try {
+        const data = await api('/admin/licenses', null, 'GET');
+        const today = new Date().toISOString().slice(0, 10);
+        tbody.innerHTML = data.licenses.map(l => {
+            const expired = l.status === 'active' && l.expiry < today;
+            const statusHtml = l.status === 'revoked'
+                ? '<span class="tag revoked">revoked</span>'
+                : (expired ? '<span class="tag expired">已到期</span>' : '<span class="tag active">active</span>');
+            const machine = l.machine_id
+                ? `<span class="machine">${escapeHtml(l.machine_id)}</span>`
+                : '<span class="machine" style="color:#bbb;">未绑定</span>';
+            return `<tr>
+                <td class="code">${escapeHtml(l.code)}</td>
+                <td>${l.expiry}</td>
+                <td>${machine}</td>
+                <td>${statusHtml}</td>
+                <td style="font-size:12px;color:#888;">${l.activated_at || '-'}</td>
+                <td class="actions">
+                    <button class="ghost" onclick="extendCode('${l.code}')">续期</button>
+                    ${l.machine_id ? `<button class="ghost" onclick="unbindCode('${l.code}')">解绑</button>` : ''}
+                    ${l.status === 'active' ? `<button class="ghost" onclick="revokeCode('${l.code}')">吊销</button>` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6">加载失败: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function revokeCode(code) {
+    if (!confirm(`确认吊销 ${code} ？吊销后立即停用。`)) return;
+    try { await api('/admin/revoke', { code }); loadLicenses(); } catch (e) { alert('吊销失败: ' + e.message); }
+}
+
+async function unbindCode(code) {
+    if (!confirm(`确认解绑 ${code} 的机器？解绑后可在新机器重新激活。`)) return;
+    try { await api('/admin/unbind', { code }); loadLicenses(); } catch (e) { alert('解绑失败: ' + e.message); }
+}
+
+async function extendCode(code) {
+    const months = prompt('续期几个月？', '1');
+    if (!months) return;
+    try { const d = await api('/admin/extend', { code, months: parseInt(months) || 1 }); alert(`已续期到 ${d.expiry}`); loadLicenses(); } catch (e) { alert('续期失败: ' + e.message); }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', logout);
+
+// 已有 token 则直接进主面板
+if (token) showMain();
+</script>
+</body>
+</html>

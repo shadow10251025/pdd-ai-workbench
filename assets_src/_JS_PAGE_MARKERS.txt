@@ -1,0 +1,14 @@
+
+(() => {
+    const t = document.body.innerText || '';
+    const has = k => t.indexOf(k) >= 0;
+    return JSON.stringify({
+        form:     has('商品标题') || has('规格与库存') || has('添加规格类型') || has('AI添加规格'),
+        first:    has('完善商品信息') || has('保存草稿'),
+        category: has('以图发品') || has('上传商品轮播图'),
+        picker:   has('选择类目') || has('商品分类'),
+        len:      t.length,
+        url:      location.href,
+        head:     t.replace(/\s+/g, ' ').slice(0, 120)
+    });
+})()

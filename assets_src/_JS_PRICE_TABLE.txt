@@ -1,0 +1,282 @@
+
+(async () => {
+    try {
+        var SKUS = __SKUS__;      // {"颜色尺码": [拼单价, 单买价, 库存, 是否启用, 规格编码]}
+        var PIPED = __PIPED__;    // {"颜色|尺码": 同上}：Python 侧用匹配规则兜底解出来的
+        var DOFILL = __DOFILL__;
+        // 「只数不写」：count_spec_rows 数页面上有几行规格时用（DOFILL=false 那一遍
+        // 会顺手给空格补规格编码 —— 那是填价格流程要的，纯核对时不能写）。
+        // typeof 兜一手：哪个调用方忘了替换 __RO__ 也只当 false，不会把页面整崩。
+        var RO = (typeof __RO__ === "undefined") ? false : __RO__;
+        var MAXSTEP = 40;         // 最多滚 40 屏（虚拟滚动一屏 6~7 行，够 200 多行了）
+
+        var norm = function (s) { return (s || '').replace(/\s+/g, ''); };
+        var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        // React 受控输入：必须走原生 setter + input/change 事件，直接改 .value 它不认。
+        // 返回 0 没这个框 / 1 真写进去了 / 2 本来就是这个值（没写）—— 返回值要区分
+        // 「写了」和「本来就对」，重填那一遍才知道自己到底改了几行。
+        var type = function (inp, val) {
+            if (!inp) return 0;
+            if (String(inp.value || '').trim() === String(val)) return 2;   // 已经是这个值
+            try { inp.focus(); } catch (e) {}
+            nativeSet.call(inp, String(val));
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+            return 1;
+        };
+        // 表头：同一行里既有「拼单价」又有尺码列。每轮重新找 —— PDD 重渲染会把行换掉
+        var findHeader = function () {
+            var trs = document.querySelectorAll('tr');
+            for (var i = 0; i < trs.length; i++) {
+                var cs = trs[i].querySelectorAll('td, th');
+                if (cs.length < 3) continue;
+                var ts = Array.prototype.map.call(cs, function (c) { return (c.innerText || '').trim(); });
+                var hasPrice = false, hasSize = false;
+                for (var j = 0; j < ts.length; j++) {
+                    if (ts[j].indexOf('拼单价') >= 0) hasPrice = true;
+                    if (/尺码|尺寸|大小|码数/.test(ts[j])) hasSize = true;
+                }
+                if (!hasPrice || !hasSize) continue;
+                var col = function (re) {
+                    for (var k = 0; k < ts.length; k++) { if (re.test(ts[k])) return k; }
+                    return -1;
+                };
+                return {idx: i, full: cs.length, color: col(/颜色|花色/), size: col(/尺码|尺寸|大小|码数/),
+                        price: col(/拼单价/), single: col(/单买价/), stock: col(/库存/),
+                        code: col(/规格编码/), enabled: col(/启用/)};
+            }
+            return null;
+        };
+        var scrollerOf = function (hidx) {
+            var trs = document.querySelectorAll('tr');
+            var el = trs[hidx + 1] ? trs[hidx + 1].parentElement : null;
+            while (el) {
+                if (el.scrollHeight > el.clientHeight + 20) return el;
+                el = el.parentElement;
+            }
+            return null;
+        };
+
+        var cur = '';                 // 颜色列 rowspan 合并：空格子继承上一行；跨轮保留
+        var seen = {}, done = {}, noin = {};
+        // 「回读两次都没留住 → 再填一遍」那一遍用的标记 + 它自己数过的行，
+        // 免得把「页面上匹配到 N 行、填了 N 行」记成两倍（2 行的表报成 4 行）。
+        var refillPass = false, done2 = {};
+        // 这一遍回读里已经记过的格子（同一格只记一次，见下面回读那处的说明）
+        var badSeen = {};
+        // 页面这一张表本身有几行、有哪些颜色（不看工具表里有没有对应的 SKU）。
+        // 用户看的就是这张表：「规格没全加上」只能从这里看出来。
+        var pageSeen = {}, colSeen = {}, sizeSeen = {};
+        var rep = {rows: 0, filled: 0, code: 0, recode: 0, off: 0, miss: [], noinput: [],
+                   bad: [], badcode: [], badctx: [], virtual_bad: 0,
+                   pageRows: 0, pageColors: [], pageSizes: []};
+        // 规格编码：页面上已经出现过的号码全记下来，保证绝不写出重号。
+        // 原来这里是 `var seq = 0`，看到空格就从 1 开始发号 —— 新加一个尺码之后，
+        // 那几个空白格拿到的是 1、2、3…，和上一轮已经写在页面上的 1、2、3… 撞个正着，
+        // 用户看到的就是「加新尺码时规格编码完全乱了」（2026-09-27）。
+        // 发号一律推迟到第二遍：第一遍把整页已有的号码收进 used，第二遍才补那些空格，
+        // 否则「空格排在编码行前面」时发出去的号待会儿又会被别人占掉。
+        var used = {};
+        var gen = {};                  // 第二遍补过号的格子：重扫到时别再换一个号
+        var nextCode = function () {
+            var mx = 0;
+            for (var k in used) {
+                if (/^\d+$/.test(k)) { var v = parseInt(k, 10); if (v > mx) mx = v; }
+            }
+            var n = mx + 1;
+            while (used[String(n)]) n++;
+            used[String(n)] = 1;
+            return String(n);
+        };
+
+        var scan = function () {
+            var h = findHeader();
+            if (!h) return false;
+            var trs = document.querySelectorAll('tr');
+            for (var i = h.idx + 1; i < trs.length; i++) {
+                var cells = trs[i].querySelectorAll('td');
+                if (cells.length < 3) continue;
+                // 同色后续尺码行的颜色格被 rowspan 吃掉 → 这一行后面的单元格整体左移
+                var delta = h.full - cells.length;
+                if (delta < 0) delta = 0;
+                if (delta === 0 && h.color >= 0 && cells[h.color]) {
+                    var c0 = (cells[h.color].innerText || '').trim();
+                    if (c0) cur = c0;
+                }
+                var size = '';
+                if (h.size >= 0 && cells[h.size - delta]) {
+                    size = (cells[h.size - delta].innerText || '').trim();
+                }
+                if (!cur && !size) continue;
+                var k1 = norm(cur) + '|' + norm(size);
+                var key = (cur + ' ' + size).trim();
+                var at = function (c) { var j = c - delta; return (j >= 0 && j < cells.length) ? cells[j] : null; };
+
+                // 页面这一行**不管工具表里有没有对应 SKU** 都先记下来：这张表就是用户
+                // 看到的东西，「页面上只有 18 行、应该有 36 行」得能从这里报出来
+                if (!pageSeen[k1]) { pageSeen[k1] = 1; rep.pageRows++; }
+                if (cur && !colSeen[norm(cur)]) { colSeen[norm(cur)] = 1; rep.pageColors.push(cur); }
+                if (size && !sizeSeen[norm(size)]) { sizeSeen[norm(size)] = 1; rep.pageSizes.push(size); }
+
+                // 规格编码：这一行页面上已有的号码，**不管工具表里有没有对应 SKU 都要先登记**。
+                // 登记必须赶在下面那个 !want 的 continue 之前：页面上有、工具表里没有的行
+                // （商家自己加的、或工具里删过颜色/尺码）也是占着号的，漏登记它们，
+                // 第二遍 nextCode() 发的号就会跟它们撞上 —— 两行同一个规格编码。
+                var cIn = (h.code >= 0 && at(h.code)) ? at(h.code).querySelector('input') : null;
+                var curCode = cIn ? String(cIn.value || '').trim() : '';
+                if (curCode) used[curCode] = 1;          // 页面上已有的，记下来别撞
+
+                var want = PIPED[k1] || SKUS[norm(cur) + norm(size)] || SKUS[norm(size)] || SKUS[norm(cur)];
+                if (!want) {
+                    if (!seen[k1]) { seen[k1] = 1; rep.miss.push({c: cur, s: size}); }
+                    continue;
+                }
+                var pCell = h.price >= 0 ? at(h.price) : null;
+                var sCell = h.single >= 0 ? at(h.single) : null;
+                var kCell = h.stock >= 0 ? at(h.stock) : null;
+                var pIn = pCell ? pCell.querySelector('input') : null;
+                var sIn = sCell ? sCell.querySelector('input') : null;
+                var kIn = kCell ? kCell.querySelector('input') : null;
+
+                // ---- 规格编码：工具表里有就以工具表为准；工具表里没有的（尺码是在拼多多
+                // 页面上加的）接着页面上最大的号码往下排，绝不从 1 重新数 ----
+                // （cIn / curCode / used[curCode] 在上面：那个 !want 的分支也要登记，见那里的注释）
+                // want[4] = 这一行在工具表里的规格编码（用户自己排的）
+                var wantCode = (want[4] === null || want[4] === undefined) ? '' : String(want[4]).trim();
+                if (wantCode) used[wantCode] = 1;
+                if (DOFILL) {
+                    if (cIn && wantCode && curCode !== wantCode) {
+                        // 工具表里有编码 → 一律以工具表为准（编码乱了的另一头也在这儿）
+                        if (type(cIn, wantCode)) { rep.code++; if (curCode) rep.recode++; }
+                    }
+                } else if (!RO && cIn && !curCode && !wantCode && !gen[k1]) {
+                    gen[k1] = 1;             // 一个格子只发一次号，重扫到也不换
+                    if (type(cIn, nextCode())) rep.code++;
+                }
+
+                if (!DOFILL) {            // 回读核对：这一行现在的值对不对
+                    // 现场（只进日志，不给用户看）：这一行几格、表头几格、价格格里当时是什么字。
+                    // 2026-09-27 那轮日志报「36 处没留住 (空)≠1198」，而同一分钟的截图里值都在 ——
+                    // 光看报错的行看不出是「读错格」还是「真被改回去」，把现场记下来才查得动。
+                    var ctx = '行' + i + ' ' + cells.length + '格/表头' + h.full + '格 delta=' + delta
+                            + ' 价格格文字="' + (pCell ? (pCell.innerText || '').trim().slice(0, 16) : '')
+                            + '" 框里=' + (pIn ? JSON.stringify(String(pIn.value || '')) : '没有框');
+                    if (pIn) {
+                        var got = String(pIn.value || '').trim();
+                        // 一个格子在一遍扫描里可能被扫到好几次（虚拟滚动相邻两屏有重叠），
+                        // 不去重的话「36 处没留住」这种数会把同一格数成好几处，吓人也误导。
+                        if (want[0] !== null && got !== String(want[0]) && !badSeen[k1 + '|p']) {
+                            badSeen[k1 + '|p'] = 1;
+                            rep.bad.push(key + ' 拼单价=' + (got === '' ? '(空)' : got) + '≠' + want[0]);
+                            rep.badctx.push(ctx);
+                        }
+                        var kv = kIn ? String(kIn.value || '').trim() : '';
+                        if (kIn && want[2] !== null && kv !== String(want[2]) && !badSeen[k1 + '|k']) {
+                            badSeen[k1 + '|k'] = 1;
+                            rep.bad.push(key + ' 库存=' + (kv === '' ? '(空)' : kv) + '≠' + want[2]);
+                            rep.badctx.push(ctx);
+                        }
+                    }
+                    // 规格编码也回读核对：编码是用户自己的 SKU 标识，错了比价格错了更麻烦
+                    if (cIn && wantCode) {
+                        var cgv = String(cIn.value || '').trim();
+                        if (cgv !== String(want[4]) && !badSeen[k1 + '|c']) {
+                            badSeen[k1 + '|c'] = 1;
+                            rep.badcode.push(key + ' 规格编码=' + (cgv === '' ? '(空)' : cgv) + '≠' + want[4]);
+                        }
+                    }
+                    continue;
+                }
+                if (!pIn && !sIn && !kIn) {   // 行在 DOM 里但输入框还没渲染出来 → 下一轮再说
+                    if (!noin[k1]) { noin[k1] = 1; rep.noinput.push(key); }
+                    continue;
+                }
+                var curDone = refillPass ? done2 : done;
+                if (curDone[k1]) continue;
+                if (!refillPass) rep.rows++;
+                var all = true, wrote = 0;
+                if (want[0] !== null) { var r0 = type(pIn, want[0]); if (!r0) all = false; else if (r0 === 1) wrote++; }
+                if (want[1] !== null) { var r1 = type(sIn, want[1]); if (!r1) all = false; else if (r1 === 1) wrote++; }
+                if (want[2] !== null) { var r2 = type(kIn, want[2]); if (!r2) all = false; else if (r2 === 1) wrote++; }
+                if (h.enabled >= 0 && want[3] === 0 && at(h.enabled)) {
+                    var cb = at(h.enabled).querySelector('input[type=checkbox]');
+                    if (cb && cb.checked) { cb.click(); rep.off++; }
+                }
+                curDone[k1] = 1;
+                if (refillPass) { if (wrote) rep.refill_rows = (rep.refill_rows || 0) + 1; }
+                else if (all) rep.filled++;
+            }
+            return true;
+        };
+
+        var h0 = findHeader();
+        if (!h0) return JSON.stringify({err: 'NO_TABLE', trs: document.querySelectorAll('tr').length});
+        var scroller = scrollerOf(h0.idx);
+        var step = scroller ? Math.max(100, Math.floor(scroller.clientHeight * 0.6)) : 0;
+        // 从上滚到底扫一遍（虚拟滚动只渲染视口附近的行，不滚过去就看不到它们）
+        var sweep = async function () {
+            if (scroller) scroller.scrollTop = 0;
+            await sleep(150);
+            if (!scan()) return false;
+            var guard = 0;
+            while (scroller && guard++ < MAXSTEP) {
+                var before = scroller.scrollTop;
+                scroller.scrollTop = before + step;
+                await sleep(150);
+                if (!scan()) return false;
+                if (scroller.scrollTop <= before) break;      // 到底了
+            }
+            return true;
+        };
+
+        var passes = 0;
+        if (!await sweep()) return JSON.stringify({err: 'NO_TABLE'});
+        passes = 1;
+        if (DOFILL) {
+            // 再扫一遍只看不写：PDD 把值改回去（受控输入没吃下这次输入）要能发现，
+            // 不能让日志说「填好了」而页面上其实没值
+            await sleep(250);
+            DOFILL = false;
+            if (await sweep()) passes = 2;
+
+            // 回读报「不对」时再回读一遍确认。表格是虚拟滚动的：每次滚进来都会重建这一行的
+            // 输入框，重建那一瞬间读到的是空 —— 一次读空就报错，整张表会被报成「全没留住」
+            // （2026-09-27 实测：日志报 36 处没留住，同一分钟的截图里值都在，用户因此以为
+            // 「改的价格没被应用」）。只有两遍回读读到**同一个**不对的值才算数。
+            var mkSet = function (a) { var m = {}; a.forEach(function (x) { m[x] = 1; }); return m; };
+            if (rep.bad.length || rep.badcode.length) {
+                var b1 = rep.bad.slice(), c1 = rep.badcode.slice();
+                var keepB = mkSet(b1), keepC = mkSet(c1);
+                await sleep(700);
+                rep.bad = []; rep.badcode = []; rep.badctx = []; badSeen = {};
+                if (await sweep()) passes = 3;
+                // bad 和 badctx 是一一对应的，按同一张「留不留」的表过滤，别让诊断串行
+                var keepIdx = rep.bad.map(function (x) { return !!keepB[x]; });
+                rep.bad = rep.bad.filter(function (x, i) { return keepIdx[i]; });
+                rep.badctx = rep.badctx.filter(function (x, i) { return keepIdx[i]; });
+                rep.badcode = rep.badcode.filter(function (x) { return !!keepC[x]; });
+                rep.virtual_bad = b1.length - rep.bad.length;      // 第一遍读到、第二遍没复现的
+
+                // 两遍都一样的才算真没留住 → 再填一遍（type() 见到等值会跳过，重填是幂等的），
+                // 填完再回读一次。只补这一遍，还留不住就如实报给用户，不无限重试。
+                if (rep.bad.length || rep.badcode.length) {
+                    await sleep(400);
+                    refillPass = true;            // 这些行允许再处理一遍（用 done2 记，别把行数记成两倍）
+                    DOFILL = true;
+                    if (await sweep()) passes = 4;
+                    refillPass = false;
+                    DOFILL = false;
+                    await sleep(250);
+                    rep.refilled = 1;
+                    rep.bad = []; rep.badcode = []; rep.badctx = []; badSeen = {};
+                    if (await sweep()) passes = 5;
+                }
+            }
+        }
+        if (scroller) scroller.scrollTop = 0;      // 把表头还回原位
+        rep.passes = passes;
+        rep.scrolled = !!scroller;
+        return JSON.stringify(rep);
+    } catch (e) { return JSON.stringify({err: String(e)}); }
+})()

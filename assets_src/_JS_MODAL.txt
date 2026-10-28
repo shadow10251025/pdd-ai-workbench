@@ -1,0 +1,21 @@
+
+    (() => {
+        const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+        const pops = Array.from(document.querySelectorAll('[class*="Modal"],[class*="modal"]'))
+            .filter(e => vis(e) && /popupContent|ModalContent|modalContent|dialogContent/i.test((e.className || '').toString()));
+        if (!pops.length) {
+            // 类名对不上时（拼多多改版就换类名）按弹窗标题文字再找一次。
+            // 找不到就当「页面上没弹窗」直接返回 —— 弹窗会一直盖在页面上把点击全吃掉。
+            Array.from(document.querySelectorAll('div'))
+                .filter(e => vis(e) && (e.innerText || '').indexOf('Excel批量编辑规格') >= 0)
+                .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length)
+                .slice(0, 1).forEach(e => pops.push(e));
+        }
+        if (!pops.length) return null;
+        const p = pops[0], r = p.getBoundingClientRect();
+        const x = p.querySelector('[data-testid*="close"],[class*="close"],[class*="Close"]');
+        return JSON.stringify({x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
+                               vw: window.innerWidth, vh: window.innerHeight, hasX: !!x});
+    })()
+    

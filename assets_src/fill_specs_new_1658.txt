@@ -1,0 +1,15 @@
+
+        (() => {
+            const items = Array.from(document.querySelectorAll(".custom-input-container"));
+            let clicked = 0;
+            items.forEach(c => {
+                const cb = c.querySelector("[data-testid=beast-core-checkbox]");
+                const inp = c.querySelector("input[placeholder*='自定义尺码']");
+                if (cb && inp && inp.value.trim() !== "" && cb.getAttribute("data-checked") !== "true") {
+                    cb.click();
+                    clicked++;
+                }
+            });
+            return "ENABLED_" + clicked;
+        })()
+        

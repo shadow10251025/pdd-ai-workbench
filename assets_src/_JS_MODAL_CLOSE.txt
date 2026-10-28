@@ -1,0 +1,20 @@
+
+    (() => {
+        const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+        const pops = Array.from(document.querySelectorAll('[class*="Modal"],[class*="modal"]'))
+            .filter(e => vis(e) && /popupContent|ModalContent|modalContent|dialogContent/i.test((e.className || '').toString()));
+        if (!pops.length) {
+            // 跟 _JS_MODAL 一样：类名对不上就按弹窗标题文字兜底找
+            Array.from(document.querySelectorAll('div'))
+                .filter(e => vis(e) && (e.innerText || '').indexOf('Excel批量编辑规格') >= 0)
+                .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length)
+                .slice(0, 1).forEach(e => pops.push(e));
+        }
+        if (!pops.length) return "NONE";
+        const p = pops[0];
+        const x = p.querySelector('[data-testid*="close"],[class*="close"],[class*="Close"]');
+        if (x) { x.click(); return "CLICKED_X"; }
+        return "NO_X";
+    })()
+    

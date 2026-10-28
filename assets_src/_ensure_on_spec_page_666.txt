@@ -1,0 +1,20 @@
+
+        (() => {
+            let links = document.querySelectorAll("a, button, span, div");
+            for (let el of links) {
+                let text = (el.innerText || "").trim();
+                if (text === "立即使用") {
+                    el.click();
+                    return "AI_TITLE_USED";
+                }
+            }
+            for (let el of links) {
+                let text = (el.innerText || "").trim();
+                if (text.includes("AI生成标题") || text.includes("AI生成")) {
+                    el.click();
+                    return "AI_GENERATE_CLICKED";
+                }
+            }
+            return "MANUAL_NEEDED";
+        })()
+        

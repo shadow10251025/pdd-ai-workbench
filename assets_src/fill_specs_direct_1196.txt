@@ -1,0 +1,20 @@
+
+    (async () => {
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        let inps = [];
+        document.querySelectorAll('[class*=goods-spec-row-box]').forEach(b => {
+            Array.from(b.querySelectorAll('input')).filter(i => (i.placeholder||'').indexOf('请输入规格名称') >= 0 && (i.value||'').trim() !== '')
+                .forEach(i => inps.push(i));
+        });
+        for (let inp of inps) {
+            try { inp.focus(); } catch(e) {}
+            await sleep(100);
+            try { inp.click(); } catch(e) {}
+            await sleep(100);
+            try { document.body.click(); } catch(e) {}
+            await sleep(100);
+        }
+        try { const a = document.activeElement; if (a && a.blur) a.blur(); } catch(e) {}
+        return "DONE_" + inps.length;
+    })()
+    

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拼多多一键上架</title>
+    <link rel="stylesheet" href="/static/style.css?v=18">
+</head>
+<body>
+    <style>
+        .hidden { display: none !important; }
+        .license-gate { position: fixed; inset: 0; z-index: 9999; background: #f5f6f8; display: flex; align-items: center; justify-content: center; }
+        .license-gate .panel { background: #fff; border-radius: 12px; padding: 40px; box-shadow: 0 4px 24px rgba(0,0,0,.12); width: 420px; max-width: 90vw; text-align: center; }
+        .license-gate h1 { font-size: 20px; margin-bottom: 8px; }
+        .license-gate .sub { color: #888; font-size: 13px; margin-bottom: 20px; }
+        .license-gate .machine { font-family: monospace; font-size: 14px; background: #f0f0f0; padding: 8px 12px; border-radius: 6px; margin-bottom: 20px; }
+        .license-gate input { width: 100%; font-size: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; text-align: center; letter-spacing: 1px; margin-bottom: 14px; box-sizing: border-box; }
+        .license-gate input:focus { outline: none; border-color: #e02e24; }
+        .license-gate button { width: 100%; font-size: 15px; padding: 12px; border: none; border-radius: 8px; background: #e02e24; color: #fff; cursor: pointer; }
+        .license-gate button:hover { opacity: .9; }
+        .license-gate .msg { margin-top: 14px; font-size: 13px; min-height: 18px; }
+        .license-gate .msg.err { color: #c0392b; }
+        .license-gate .msg.ok { color: #1a9b4f; }
+        .license-banner { background: #fff7e6; color: #c77d00; text-align: center; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid #ffe0b2; }
+        .usage-bar { background: #f0f7ff; border: 1px solid #cfe3ff; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: #333; }
+        .usage-bar b { font-family: monospace; }
+        .usage-bar #usageCount { color: #e02e24; }
+        .usage-bar #usageQuota { color: #888; }
+    </style>
+
+    <div class="license-gate hidden" id="licenseGate">
+        <div class="panel">
+            <h1>🔐 软件授权</h1>
+            <div class="sub">第一步：把下面的「验证码」发给出租方<br>第二步：把出租方发回的「激活码」填进来<br>第三步：把出租方发回的「资产包」（assets_ 开头的 zip）在<b>上架页</b>的「📦 资产包」那里导入</div>
+            <div class="machine">本机验证码：<span id="machineId">加载中...</span> <a href="javascript:void(0)" onclick="copyMachineId()" style="color:#e02e24;font-size:12px;">复制</a></div>
+            <input type="text" id="licenseCode" placeholder="粘贴出租方发给你的激活码" autocomplete="off">
+            <button type="button" onclick="activateLicense()">激活</button>
+            <div class="msg" id="licenseMsg"></div>
+        </div>
+    </div>
+
+    <div class="license-banner hidden" id="licenseBanner"></div>
+
+    <div class="container">
+        <!-- 顶部导航 -->
+        <header class="header">
+            <h1>商品视觉与上架工作台</h1>
+            <div class="header-actions">
+                <span class="status" id="status">就绪</span>
+            </div>
+        </header>
+
+        <!-- 主要内容区 -->
+        <main class="main">
+            <!-- 左侧菜单 -->
+            <aside class="sidebar">
+                <nav class="nav-menu">
+                    <button type="button" class="nav-item active" data-tab="ai">
+                        <span class="icon">◈</span>
+                        图片工作台
+                    </button>
+                    <button type="button" class="nav-item" data-tab="migrate">
+                        <span class="icon">▤</span>
+                        商品资料与上架
+                    </button>
+                    <button type="button" class="nav-item" data-tab="products">
+                        <span class="icon">📋</span>
+                        商品列表
+                    </button>
+                    <button type="button" class="nav-item hidden" id="navAdmin" data-tab="admin">
+                        <span class="icon">🔑</span>
+                        管理
+                    </button>
+                </nav>
+            </aside>
+
+            <!-- 右侧内容 -->
+            <section class="content">
+                <!-- 商品照片、出图方案、审核结果和上架资料使用同一份商品草稿。 -->
+                <div class="tab-panel active ai-workbench" id="tab-ai">
+                    <div class="ai-page-heading"><div><p class="ai-eyebrow">商品视觉工作台</p><h2>把实物照片，变成上架素材</h2><p class="description">自动规划主图、详情和规格预览。你可以调整方案，生成后逐张审核。</p></div><span class="ai-platform-pill">拼多多</span></div>
+                    <nav class="ai-flow" aria-label="制作流程"><a href="#aiUploadSection"><b>1</b>上传识图</a><a href="#aiPlanSection"><b>2</b>策划与确认</a><a href="#aiResult"><b>3</b>生图与审核</a><button type="button" onclick="aiContinueToListing()"><b>4</b>资料与上架</button></nav>
+                    <div class="ai-notice">请使用自有或已获授权的素材。发布前请核对商品外观与文案，最终发布由你本人操作。</div>
+                    <div id="aiDirtyNotice" class="ai-dirty-notice" hidden></div>
+                    <div class="ai-setup-grid">
+                    <section class="section ai-upload-section" id="aiUploadSection">
+                        <div class="ai-section-heading"><h3>上传商品照片</h3><span>最多 12 张</span></div>
+                        <div id="aiDropZone" tabindex="0" role="button" aria-label="拖拽或选择商品照片" class="ai-drop-zone">
+                            <span class="ai-upload-symbol" aria-hidden="true">＋</span><strong>拖入照片，或点击选择</strong><span>正面、背面和细节越清楚，商品还原越准确</span>
+                            <button type="button" id="aiChooseImage" class="btn btn-secondary">选择照片</button>
+                            <input type="file" id="aiProductImage" accept="image/jpeg,image/png,image/webp,image/bmp" multiple hidden>
+                        </div>
+                        <label class="ai-switch-label"><input id="aiAutoRecognize" type="checkbox" checked> 上传后自动识图与策划（已配置服务时）</label><p class="hint">识图与策划可能产生文字/视觉模型费用，确认前不会调用生图接口。</p><div class="ai-provider-actions"><button type="button" class="btn btn-secondary" id="aiNewProductButton" onclick="aiBeginNewProduct()">开始新商品</button><button type="button" class="btn btn-secondary" id="aiRestoreLastProduct" onclick="aiRestoreLastProduct()" hidden>恢复上一商品</button></div><div id="aiFileList" class="ai-file-list" style="display:none;"></div>
+                        <label class="ai-field">商品提示（可选）<input type="text" id="aiProductHint" class="form-input" placeholder="例如：米白色针织上衣；不确定可以留空"></label>
+                        <p class="hint">如果有多个颜色，请在照片下填写对应颜色。规格预览会使用对应实物参考。</p>
+                    </section>
+                    <section class="section ai-plan-section" id="aiPlanSection">
+                        <div class="ai-section-heading"><h3>图片方案与规格</h3><span id="aiPlanStatus">正在计算方案</span></div>
+                        <div class="ai-basic-controls"><label class="ai-field">视觉风格<select id="aiStyle" class="form-input"><option value="minimal">极简棚拍</option><option value="fresh">清新自然</option><option value="luxury">高级质感</option><option value="tech">科技产品</option></select></label><label class="ai-field">文案密度<select id="aiCreativeDensity" class="form-input"><option value="rich">丰富卖点与场景</option><option value="conservative">少文字，突出商品</option></select></label></div>
+                        <label class="ai-switch-label"><input type="checkbox" id="aiModelScene" checked> 加入合成模特 / 人物场景</label>
+                        <div class="ai-spec-inputs"><label class="ai-field">实际颜色 / 款式<input id="aiSelectedColors" class="form-input" placeholder="例如：米白色、黑色"></label><label class="ai-field">实际尺码<input id="aiSelectedSizes" class="form-input" placeholder="例如：S、M、L、XL"></label></div>
+                        <p class="hint">只填写实际出售的规格；多个值用逗号或顿号分开。未填写的规格可在生成后审核。</p>
+                        <div class="ai-basic-controls"><label class="ai-field">主图候选数量<input id="aiHeroCount" type="number" class="form-input" min="1" max="10" value="6"></label><label class="ai-field">本次图片请求上限<input id="aiMaxRequests" type="number" class="form-input" min="0" max="100" value="0"><span class="hint">0 表示按下方方案锁定；识别后也不会静默超出。</span></label></div>
+                        <label class="ai-switch-label ai-auto-plan"><input type="checkbox" id="aiAutoModulePlan" checked> 自动推荐图片类型与场景 <span>手动调整下方模块后会切换为自定义</span></label>
+                        <div id="aiDetailModules" class="ai-module-grid">
+                            <label><input type="checkbox" class="ai-module-choice" data-module="carousel_sell" checked><span>首屏卖点</span><input aria-label="首屏卖点数量" type="number" class="ai-module-count" data-module-count="carousel_sell" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="angle" checked><span>多角度展示</span><input aria-label="多角度数量" type="number" class="ai-module-count" data-module-count="angle" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="lifestyle" checked><span>人物 / 生活场景</span><input aria-label="场景图数量" type="number" class="ai-module-count" data-module-count="lifestyle" min="1" max="20" value="2"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="feature_macro" checked><span>材质 / 细节特写</span><input aria-label="细节图数量" type="number" class="ai-module-count" data-module-count="feature_macro" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="mechanism"><span>结构 / 功能说明</span><input aria-label="结构图数量" type="number" class="ai-module-count" data-module-count="mechanism" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="steps"><span>使用步骤</span><input aria-label="步骤图数量" type="number" class="ai-module-count" data-module-count="steps" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="comparison"><span>对比说明</span><input aria-label="对比图数量" type="number" class="ai-module-count" data-module-count="comparison" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="packaging"><span>包装 / 随附物</span><input aria-label="包装图数量" type="number" class="ai-module-count" data-module-count="packaging" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="sku_preview" checked><span>颜色 / 款式预览</span><input aria-label="规格预览数量" type="number" class="ai-module-count" data-module-count="sku_preview" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="trust_faq"><span>常见问题</span><input aria-label="常见问题数量" type="number" class="ai-module-count" data-module-count="trust_faq" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="closing_cta"><span>收尾 / 选购提示</span><input aria-label="收尾图数量" type="number" class="ai-module-count" data-module-count="closing_cta" min="1" max="20" value="1"><small>张</small></label>
+                            <label><input type="checkbox" class="ai-module-choice" data-module="size_chart" id="aiSizeChartModule"><span>尺码表（实测）</span><input aria-label="尺码表数量" type="number" class="ai-module-count" data-module-count="size_chart" min="1" max="2" value="1"><small>张</small></label>
+                        </div>
+                        <div id="aiSizeChartFields" class="ai-size-section" style="display:none;"><b>尺码表实测数据</b><p class="hint">尺码行跟随上方选择。单位请写在数值中，例如 66 cm；未知尺寸留空。</p><label class="ai-field">测量项目<input id="aiSizeColumns" class="form-input" value="衣长、胸围、肩宽、袖长" placeholder="用逗号或顿号分隔，例如 长、宽、高"></label><div id="aiSizeChartTable" class="ai-table-scroll"></div><label class="ai-switch-label"><input type="checkbox" id="aiSizeChartOnlySelected" checked> 仅生成当前选择的尺码</label><details class="ai-advanced"><summary>粘贴已有尺码数据（可选）</summary><textarea id="aiSizeChartSpecs" class="form-input" rows="3" placeholder="S | 衣长=66 cm | 胸围=100 cm"></textarea></details></div>
+                        <label class="ai-field">广告短文案（可选，留空由 AI 推荐）<input type="text" id="aiAdCopy" class="form-input" maxlength="160" placeholder="例如：日常好搭，自然质感"></label>
+                        <details class="ai-advanced"><summary>清晰度与分轮设置</summary><div class="ai-basic-controls"><label class="ai-field">生成方式<select id="aiStrategy" class="form-input"><option value="grid" selected>合并网格，优先节省请求</option><option value="quality">主图与详情分别生成</option></select></label><label class="ai-field">生成轮次<select id="aiGenerationRounds" class="form-input"><option value="0" selected>自动，优先减少请求</option><option value="1">1 轮起</option><option value="2">2 轮起</option><option value="3">3 轮起</option><option value="4">4 轮起</option></select></label><label class="ai-field">每轮最多网格<select id="aiGrid" class="form-input"><option value="2x2">2 × 2（优先清晰）</option><option value="2x3" selected>2 × 3（均衡）</option><option value="3x3">3 × 3</option><option value="3x4">3 × 4</option><option value="4x4">4 × 4（需高分辨率）</option></select></label><label class="ai-field">服务商支持的原生输出尺寸<input type="text" class="form-input" id="aiImageSize" value="2048x2048" placeholder="例如 2048x2048"></label><label class="ai-field">模块分配<select id="aiRoundStrategy" class="form-input"><option value="auto">自动分配</option><option value="balanced">平均分配</option><option value="separate">同类模块集中</option></select></label></div><p class="hint">方案会按原生像素预算拆批。网格越密，单张可用像素越少；放大不能恢复原始细节。</p><ol id="aiPlanBatches" class="ai-plan-batches" aria-live="polite"></ol></details>
+                        <details class="ai-advanced ai-provider-settings" id="aiProviderSettings"><summary>服务设置 <span id="aiConnectionLabel">本地演示</span></summary><div class="ai-basic-controls"><label class="ai-field">图片 API 地址<input type="url" id="aiImageApiUrl" class="form-input" placeholder="https://api.example.com/v1/images/generations"></label><label class="ai-field">图片 API Key<input type="password" id="aiImageApiKey" class="form-input" autocomplete="off" placeholder="仅本次会话使用"></label><label class="ai-field">图片模型<input type="text" id="aiImageModel" class="form-input" placeholder="服务商提供的模型名称"></label><label class="ai-field">参考图模式<select id="aiReferenceMode" class="form-input"><option value="auto">自动（优先编辑接口）</option><option value="edit">编辑接口（带参考图）</option><option value="generation">生成接口（不带参考图）</option></select></label><label class="ai-field">策划 API 地址（默认兼作识图）<input type="url" id="aiPromptApiUrl" class="form-input" placeholder="https://api.example.com/v1/chat/completions"></label><label class="ai-field">策划 API Key<input type="password" id="aiPromptApiKey" class="form-input" autocomplete="off" placeholder="仅本次会话使用"></label><label class="ai-field">策划模型<input type="text" id="aiPromptModel" class="form-input" placeholder="支持视觉识别的模型名称"></label></div><details class="ai-vision-config"><summary>单独配置识图 AI（可选，留空共用策划服务）</summary><div class="ai-basic-controls"><label class="ai-field">识图 API 地址<input type="url" id="aiVisionApiUrl" class="form-input" placeholder="支持视觉的 chat/completions 接口"></label><label class="ai-field">识图 API Key<input type="password" id="aiVisionApiKey" class="form-input" autocomplete="off" placeholder="仅本次会话使用"></label><label class="ai-field">识图模型<input id="aiVisionModel" class="form-input" placeholder="支持读取图片的模型"></label></div></details><div class="ai-provider-actions"><button type="button" class="btn btn-secondary" id="aiTestImageProvider">测试图片服务连接</button><button type="button" class="btn btn-secondary" id="aiTestPromptProvider">测试资料服务连接</button><button type="button" class="btn btn-secondary" id="aiClearProviderKeys">清除密钥</button></div><p class="hint" id="aiProviderTestResult" aria-live="polite">连接测试不生成图片，不验证成图质量。</p><p class="hint">密钥仅留在当前页面，不写入浏览器缓存。真实生成会把参考照片发送到你选择的服务商。</p></details>
+                        <div id="aiRunModeHint" class="ai-mode-note"></div>
+                        <div id="aiPlanWarnings" class="ai-plan-warnings"></div>
+                    </section></div>
+                    <section id="aiProposal" class="section ai-proposal" style="display:none;" aria-live="polite"><div class="ai-section-heading"><h3>先确认策划，再生成图片</h3><button type="button" id="aiReplanButton" class="btn btn-secondary" onclick="aiPrepareProposal()">更新策划（保留识图结果）</button><button type="button" class="btn btn-secondary" onclick="aiExportProposal()">导出提示词</button></div><p id="aiProposalStatus" class="hint"></p><div id="aiGenerationMode" class="ai-generation-mode" role="status"></div><div id="aiPendingSubmission" class="ai-pending-submission" hidden></div><div id="aiRecognitionFacts" class="spec-info"></div><div id="aiProposalReferences" class="ai-proposal-references"></div><div id="aiOtherSpecsEditor" class="ai-other-specs"></div><div id="aiProposalSuggestions" class="ai-proposal-suggestions"></div><div class="ai-basic-controls"><label class="ai-field">建议商品标题<input id="aiProposalTitle" class="form-input"></label><label class="ai-field">品牌（未确认留空）<input id="aiProposalBrand" class="form-input"></label><label class="ai-field">类目建议<input id="aiProposalCategory" class="form-input"></label></div><label class="ai-field">建议商品描述<textarea id="aiProposalDescription" rows="3" class="form-input"></textarea></label><p class="hint">下方每张提示词均可修改。修改照片、风格、模块或规格后，请先更新策划，避免旧提示词与新设置不一致。</p><div id="aiProposalModules" class="ai-proposal-modules"></div><details class="ai-advanced"><summary>查看实际分批请求提示词与数量</summary><div id="aiProposalBatches"></div></details></section><section class="section ai-progress" id="aiProgress" style="display:none;" aria-live="polite"><h3>生成进度</h3><div id="aiProgressContent"></div><div class="ai-provider-actions"><button type="button" class="btn btn-secondary" id="aiCancelTask" hidden>停止后续请求</button><button type="button" class="btn btn-secondary" id="aiResumeTask" hidden>继续未完成部分</button></div></section>
+                    <section class="section ai-result" id="aiResult" style="display:none;">
+                        <div class="ai-section-heading"><div><p class="ai-eyebrow">审核工作台</p><h3>逐张检查，再用于上架</h3></div><div class="ai-provider-actions"><button type="button" class="btn btn-secondary" id="aiMobilePreviewButton">手机详情预览</button><button type="button" class="btn btn-secondary" id="aiRestorePrevious" onclick="aiRestorePreviousVersion()" hidden>恢复上一版</button></div></div>
+                        <div id="aiCostNote" class="hint"></div>
+                        <div class="ai-review-layout"><div class="ai-review-images">
+                            <div class="ai-image-group-heading"><h4>主图候选</h4><span>可设置首图并调整顺序</span></div><div id="aiMainPreview" class="ai-image-grid"></div>
+                            <div class="ai-image-group-heading"><h4>详情图</h4><span>按实际比例展示，点击查看大图</span></div><div id="aiDetailPreview" class="ai-image-grid"></div>
+                            <div class="ai-image-group-heading"><h4>规格预览</h4><span>只使用有实物参考绑定的颜色 / 款式</span></div><div id="aiSpecPreview" class="ai-image-grid"></div>
+                            <div id="aiSpecMissing" class="hint"></div>
+                        </div><aside class="ai-review-editor">
+                            <h4>商品资料</h4><label class="ai-field">商品标题<input type="text" id="aiTitle" class="form-input"></label><label class="ai-field">商品描述<textarea id="aiDescription" class="form-input" rows="4"></textarea></label>
+                            <div class="ai-basic-controls"><label class="ai-field">品牌候选<input type="text" id="aiBrand" class="form-input" placeholder="未确认可留空"></label><label class="ai-field">类目候选<input type="text" id="aiCategory" class="form-input"></label></div>
+                            <div class="ai-field">商品属性<div id="aiAttrsEditor"></div><button type="button" class="btn btn-secondary ai-small-button" onclick="aiAddAttribute()">添加属性</button></div>
+                            <div id="aiSpecEditor" class="spec-info"></div>
+                            <details class="ai-advanced"><summary>场景、提示词与复核信息</summary><div id="aiMeta" class="spec-info"></div><details><summary>完整生图计划</summary><pre id="aiPromptPack"></pre></details></details>
+                            <details class="ai-advanced"><summary>高级资料编辑</summary><label class="ai-field">属性 JSON<textarea id="aiAttrs" class="form-input" rows="3"></textarea></label><label class="ai-field">护理建议（不生成护理图片）<textarea id="aiCare" class="form-input" rows="3"></textarea></label></details>
+                            <div class="ai-listing-actions"><button type="button" class="btn btn-secondary" onclick="aiSaveDraft()">保存商品草稿</button><button type="button" class="btn btn-primary" onclick="aiContinueToListing()">去填写价格与库存</button><button type="button" class="btn btn-secondary" onclick="aiStartListing()">填入拼多多发布页</button></div>
+                        </aside></div>
+                    </section>
+                    <div class="ai-generate-bar"><div><strong id="aiPlanSummary">正在计算出图方案</strong><span id="aiPlanCost">费用以所选服务商为准</span></div><button type="button" class="btn btn-primary" id="aiGenerateButton" onclick="runAiWorkflow()">识图并策划方案</button></div>
+                </div>
+
+                <!-- 抓取商品信息并填表（原叫「商品搬家」）
+                     ★ 2026-09-28 改名 + 加用途限制：原措辞「商品搬家 / 从淘宝抓取商品信息，
+                       编辑价格后一键上架到拼多多」是「把别人的商品搬过来」的行业叫法，等于
+                       在界面上自认工具用途。这里改成如实描述功能本身，并把允许/禁止的用途
+                       写死。**这不是换个招牌遮一下** —— 之所以这么改，是因为它如实了，
+                       而不是因为它好听。
+                     ★ 另一条必须留在界面上：「最后一步发布由你本人点击」（见 one_click_list.py
+                       第 13 行的铁律：不点击发布/提交/保存草稿）。这是本工具最强的一条有利事实，
+                       现在显式写出来，而不是埋在《使用说明》第 38 行。 -->
+                <div class="tab-panel" id="tab-migrate">
+                    <h2>商品资料与上架</h2>
+                    <p class="description">审核图片与规格，填写价格和库存，再填入拼多多发布页。最终发布由你本人确认。</p>
+                    <p class="ai-notice">请核对当前店铺、图片、规格与库存。商品资料来自已审核的商品草稿；旧链接导入收在下方兼容工具。</p>
+
+                    <!-- 快捷打开淘宝 / 拼多多界面 -->
+                    <div class="actions" style="justify-content:flex-start;margin-bottom:14px;">
+                        <button type="button" class="btn btn-secondary" onclick="openTaobao()">🛒 打开淘宝界面</button>
+                        <button type="button" class="btn btn-secondary" onclick="openPdd()">🏪 打开拼多多上架界面</button>
+                        <button type="button" class="btn btn-secondary" onclick="openPddLogin()">🔑 打开新店铺窗口（登录）</button>
+                    </div>
+
+                    <!-- 验证码 + 上款数量（截图发给出租方核对用） -->
+                    <div class="usage-bar" id="usageBar">
+                        验证码：<b id="usageMachineId">-</b>
+                        ｜ 有效期：<b id="usageExpiry">-</b>
+                        ｜ 月限额：<b id="usageQuota">-</b>
+                        ｜ 本月已上架：<b id="usageCount">-</b> 款
+                        ｜ 时间：<b id="usageTime">-</b>
+                        <div style="margin-top:6px;">激活码：<b id="usageCode" style="word-break:break-all;">-</b></div>
+                    </div>
+
+                    <!-- 导入资产包：出租方发来的 assets_<验证码>.zip。
+                         没导入的话，激活成功也点不了上架 —— 干活的 JS 在这包里。 -->
+                    <div class="batch-set-bar" style="margin-bottom:12px;">
+                        <span style="font-size:13px;color:#555;">📦 资产包：</span>
+                        <input type="file" id="packFile" accept=".zip" style="font-size:13px;">
+                        <button type="button" class="btn btn-secondary" onclick="importPack()">导入</button>
+                        <span id="packMsg" style="font-size:12px;color:#888;"></span>
+                    </div>
+
+                    <!-- 切换激活码（测试用） -->
+                    <div class="batch-set-bar" style="margin-bottom:12px;">
+                        <span style="font-size:13px;color:#555;">🔑 切换激活码：</span>
+                        <input type="text" id="switchCode" placeholder="粘贴新激活码（测试用）" style="flex:1;min-width:220px;font-family:monospace;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;" autocomplete="off">
+                        <button type="button" class="btn btn-secondary" onclick="switchLicense()">切换</button>
+                        <span id="switchMsg" style="font-size:12px;color:#888;"></span>
+                    </div>
+                    <div id="testCountdown" style="display:none;font-size:12px;color:#c0392b;margin:-4px 0 12px;"></div>
+
+                    <details class="ai-advanced"><summary>旧版链接抓取（仅自有 / 授权商品）</summary>
+                    <!-- Step 1: 输入淘宝链接 -->
+                    <div class="section">
+                        <h3>📋 第一步：抓取淘宝商品</h3>
+                        <div class="form-group">
+                            <label>淘宝商品链接 *</label>
+                            <input type="text" id="migrateUrl" placeholder="输入淘宝商品链接，如 https://item.taobao.com/item.htm?id=xxx" class="form-input" onfocus="this.select()">
+                        </div>
+                        <!-- 权利确认：每次抓取前必勾。不勾就不让抓（见 app.js 的 scrapeTaobao）。
+                             ★ 这条是「我要求你合法使用」，不是「我知道你乱用但别找我」——
+                               后者在法律上是自认「明知」，属于加重情节，绝不能写成那样。 -->
+                        <div style="margin:10px 0;font-size:13px;line-height:1.6;color:#333;">
+                            <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+                                <input type="checkbox" id="rightsConfirm" style="margin-top:3px;flex:0 0 auto;">
+                                <span>我确认<b>本次搬的是我自己的商品</b>：抓取的素材我拥有著作权
+                                    或已获得权利人授权，不属于搬运他人商品；我也理解本工具只做信息填充，
+                                    <b>最后一步「发布」由我本人操作并负责</b>。</span>
+                            </label>
+                            <div id="rightsHint" style="color:#c0392b;margin-top:4px;display:none;">
+                                请先勾选上面的确认，再抓取 —— 本功能仅限搬你自己的商品，
+                                搬别人的商品请不要勾。
+                            </div>
+                        </div>
+
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary" onclick="scrapeTaobao()">🔍 抓取商品信息</button>
+                            <button type="button" class="btn btn-secondary" onclick="saveMigratedProduct()">💾 保存到商品列表</button>
+                        </div>
+                    </div>
+
+                    </details>
+
+                    <!-- 抓取进度 -->
+                    <div class="section" id="scrapeProgress" style="display:none;">
+                        <h3>抓取进度</h3>
+                        <div id="scrapeProgressContent"></div>
+                    </div>
+
+                    <!-- 商品信息展示 -->
+                    <div class="section" id="productInfo" style="display:none;">
+                        <h3>📦 商品信息</h3>
+                        <div class="form-group">
+                            <label>商品标题</label>
+                            <input type="text" id="productTitle" class="form-input" readonly>
+                        </div>
+                        <div id="specInfo" class="spec-info"></div>
+                    </div>
+
+                    <!-- 主图展示 -->
+                    <div class="section" id="mainImagesSection" style="display:none;">
+                        <h3>🖼️ 主图（将自动上传到拼多多）
+                            <button type="button" class="btn btn-secondary" onclick="downloadAllImages()" style="float:right;padding:4px 12px;font-size:12px;">📥 下载全部图片</button>
+                        </h3>
+                        <div id="mainImagesPreview" class="detail-images-preview"></div>
+                    </div>
+
+                    <!-- 详情图展示 -->
+                    <div class="section" id="detailImagesSection" style="display:none;">
+                        <h3>🖼️ 详情图 <span style="font-size:12px;color:#999;font-weight:normal;">（拖动图片可调整顺序）</span>
+                            <button type="button" class="btn btn-secondary" onclick="downloadAllImages()" style="float:right;padding:4px 12px;font-size:12px;">📥 下载全部图片</button>
+                        </h3>
+                        <div id="detailImagesPreview" class="detail-images-preview"></div>
+                    </div>
+
+                    <!-- Step 2: 编辑SKU价格 -->
+                    <div class="section" id="skuSection" style="display:none;">
+                        <h3>💰 第二步：编辑价格与库存</h3>
+
+                        <!-- 操作按钮 -->
+                        <div class="batch-set-bar">
+                            <button type="button" class="btn btn-primary" onclick="downloadSkuExcel()">📥 下载Excel表格</button>
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('skuExcelInput').click()">📤 上传填好的Excel</button>
+                            <input type="file" id="skuExcelInput" accept=".xlsx,.xls" style="display:none" onchange="uploadSkuExcel(event)">
+                            <span style="color:#999; margin:0 8px;">|</span>
+                            <button type="button" class="btn btn-purple" onclick="downloadPddExcel()">⬇️ 从拼多多下载表格</button>
+                        </div>
+
+                        <!-- 批量设置 -->
+                        <div class="batch-set-bar">
+                            <span>批量设置：</span>
+                            <label>拼单价 <input type="number" id="batchPrice" value="1198" step="1" class="form-input-sm"></label>
+                            <label>单买价 <input type="number" id="batchSinglePrice" value="1298" step="1" class="form-input-sm"></label>
+                            <label>库存 <input type="number" id="batchStock" value="100" step="1" class="form-input-sm"></label>
+                            <button type="button" class="btn btn-secondary" onclick="batchSetSkuPrices()">应用到全部</button>
+                        </div>
+                        <div class="batch-set-bar">
+                            <span>规格编码：</span>
+                            <label>起始编号 <input type="number" id="batchSpecCodeStart" value="1" min="1" step="1" class="form-input-sm"></label>
+                            <button type="button" class="btn btn-secondary" onclick="batchSetSpecCode()">按顺序填充</button>
+                        </div>
+                        <div class="batch-set-bar">
+                            <span>添加尺码：</span>
+                            <label>尺码值 <input type="text" id="newSizeValue" placeholder="如 XL / 37码" class="form-input-sm" style="width:100px"></label>
+                            <button type="button" class="btn btn-secondary" onclick="addSize()">➕ 添加尺码</button>
+                            <span style="color:#999;font-size:12px;">（为每个颜色各生成一行，自动复用该颜色的预览图）</span>
+                        </div>
+
+                        <!-- SKU表格 -->
+                        <div class="table-wrapper">
+                            <table class="sku-table" id="skuTable">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                                        <th>规格名称</th>
+                                        <th>预览图</th>
+                                        <th>拼单价 (元)</th>
+                                        <th>单买价 (元)</th>
+                                        <th>库存</th>
+                                        <th>规格编码</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="skuTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="sku-summary" id="skuSummary"></div>
+                    </div>
+
+                    <!-- Step 3: 执行上架 -->
+                    <div class="section" id="executeSection" style="display:none;">
+                        <h3>🚀 第三步：执行上架</h3>
+                        <p class="hint">点击执行后，系统将自动完成：填充规格 → 上传图片 → 填写价格库存</p>
+                        <p class="hint" id="shopSummaryHint"></p>
+                        <button type="button" class="btn btn-primary btn-lg" onclick="startListing()">🚀 执行一键上架</button>
+                    </div>
+
+                    <!-- 执行进度 -->
+                    <div class="section" id="listingProgress" style="display:none;">
+                        <h3>执行进度</h3>
+                        <div id="listingProgressContent"></div>
+                    </div>
+
+                    <!-- 执行结果 -->
+                    <div class="section" id="listingResult" style="display:none;">
+                        <h3>执行结果</h3>
+                        <div class="result-card" id="listingResultContent"></div>
+                    </div>
+
+                    <!-- 店铺勾选弹窗（多店铺上架用） -->
+                    <div id="shopPickerModal"
+                         style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;">
+                        <div style="max-width:540px;max-height:80vh;overflow:auto;margin:7vh auto;background:#fff;
+                                    border-radius:10px;padding:20px 24px;box-shadow:0 12px 40px rgba(0,0,0,.28);">
+                            <h3 style="margin:0 0 6px;">🏬 上架到哪几家店</h3>
+                            <p class="hint" id="shopPickerHint"></p>
+                            <div id="shopPickerList" style="margin:14px 0;"></div>
+                            <div class="actions">
+                                <button type="button" class="btn btn-secondary" onclick="closeShopPicker()">取消</button>
+                                <button type="button" class="btn btn-primary" onclick="confirmShopPicker()">开始上架</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 商品列表 -->
+                <div class="tab-panel" id="tab-products">
+                    <h2>商品列表</h2>
+                    <div class="product-list" id="productList">
+                        <p class="empty-state">暂无商品</p>
+                    </div>
+                </div>
+
+                <!-- 管理（发码后台，仅管理端显示） -->
+                <div class="tab-panel" id="tab-admin">
+                    <h2>🔑 授权管理（发码后台）</h2>
+                    <p class="description">生成激活码、查码、续期、记账。此页只在你自己的「管理端」里出现，租户看不到。</p>
+
+                    <!-- 统计卡片 -->
+                    <div class="section">
+                        <h3>📈 概览</h3>
+                        <div id="adminStats" style="display:flex;gap:12px;flex-wrap:wrap;font-size:13px;"></div>
+                    </div>
+
+                    <!-- 发码 -->
+                    <div class="section">
+                        <h3>➕ 生成激活码</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>验证码 *</label>
+                                <input type="text" id="adminMid" placeholder="XXXX-XXXX-XXXX-XXXX" class="form-input" style="font-family:monospace;" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label>时长（月 + 天）</label>
+                                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                    <input type="number" id="adminMonths" value="1" min="0" max="60" class="form-input" style="width:80px;">
+                                    <span style="font-size:13px;color:#888;">月</span>
+                                    <input type="number" id="adminDays" value="0" min="0" max="366" class="form-input" style="width:80px;">
+                                    <span style="font-size:13px;color:#888;">天</span>
+                                    <select id="adminPreset" class="form-input" style="width:auto;" onchange="adminApplyPreset()">
+                                        <option value="">快捷…</option>
+                                        <option value="0,15">半个月（15天）</option>
+                                        <option value="1,0">1个月</option>
+                                        <option value="1,15">一个半月</option>
+                                        <option value="2,0">2个月</option>
+                                        <option value="3,0">3个月</option>
+                                        <option value="6,0">半年</option>
+                                        <option value="12,0">一年</option>
+                                    </select>
+                                </div>
+                                <div style="font-size:12px;color:#888;margin-top:4px;">半个月 = 0月15天；一个半月 = 1月15天</div>
+                            </div>
+                            <div class="form-group">
+                                <label>月限额（款）</label>
+                                <input type="number" id="adminQuota" value="1000" min="1" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label>收费（元）</label>
+                                <input type="number" id="adminAmount" value="0" step="0.01" min="0" class="form-input">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>备注（租户名/联系方式）</label>
+                                <input type="text" id="adminNote" placeholder="如：张三 138xxxx" class="form-input" autocomplete="off">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>测试码（分钟，0=不生成测试码）</label>
+                                <input type="number" id="adminMinutes" value="0" min="0" class="form-input">
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary" onclick="adminGen()">🔑 生成激活码</button>
+                            <span id="adminGenMsg" style="font-size:13px;color:#888;"></span>
+                        </div>
+                        <div id="adminGenResult" class="result-card" style="display:none;margin-top:12px;"></div>
+                    </div>
+
+                    <!-- 查码 / 续期 -->
+                    <div class="section">
+                        <h3>🔍 解析激活码</h3>
+                        <div class="form-group">
+                            <input type="text" id="adminDecodeCode" placeholder="粘贴激活码，解析出验证码/到期日/月限额" class="form-input" style="font-family:monospace;" autocomplete="off">
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="adminDecode()">解析</button>
+                        <div id="adminDecodeResult" style="margin-top:10px;font-size:13px;"></div>
+                    </div>
+
+                    <!-- 列表 -->
+                    <div class="section">
+                        <h3>📋 已发激活码
+                            <button type="button" class="btn btn-secondary" onclick="adminExport()" style="float:right;padding:4px 12px;font-size:12px;">⬇️ 导出CSV</button>
+                        </h3>
+                        <div class="batch-set-bar">
+                            <input type="text" id="adminSearch" placeholder="按验证码/备注/激活码搜索" class="form-input" style="flex:1;min-width:200px;" autocomplete="off">
+                            <select id="adminStatusFilter" class="form-input" style="width:auto;">
+                                <option value="">全部状态</option>
+                                <option value="active">有效</option>
+                                <option value="void">作废</option>
+                            </select>
+                            <button type="button" class="btn btn-secondary" onclick="adminList()">查询</button>
+                        </div>
+                        <div class="table-wrapper" style="margin-top:10px;">
+                            <table class="sku-table" style="font-size:12px;">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th><th>验证码</th><th>激活码</th><th>到期日</th>
+                                        <th>时长</th><th>限额</th><th>金额</th><th>备注</th><th>状态</th><th>生成时间</th><th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 图片放大预览 -->
+    <div id="lightbox" class="lightbox" style="display:none;" onclick="closeLightbox()">
+        <img id="lightboxImg" src="" alt="预览图" onclick="event.stopPropagation()">
+    </div>
+
+    <script src="/static/api_client.js?v=1"></script>
+    <script src="/static/app.js?v=29"></script>
+    <script src="/static/ai_workflow.js?v=19"></script>
+    <script src="/static/creative_workbench.js?v=1"></script>
+    <script src="/static/module_examples.js?v=1"></script>
+</body>
+</html>
+

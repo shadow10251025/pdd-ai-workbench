@@ -1,0 +1,15 @@
+
+        (() => {
+            let btns = document.querySelectorAll("button");
+            for (let b of btns) {
+                let t = (b.innerText||"").trim();
+                let rect = b.getBoundingClientRect();
+                if (t.indexOf("添加规格类型") >= 0 && rect.height > 0 && !b.disabled) {
+                    b.scrollIntoView({block:'center'});
+                    b.click();
+                    return "CLICKED";
+                }
+            }
+            return "NOT_FOUND";
+        })()
+        
