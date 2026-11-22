@@ -13,11 +13,11 @@ PURPOSES = {
     'proof': 'A close photograph of visible texture or workmanship; show the detail clearly.',
     'flat_lay': 'A natural overhead arrangement of the photographed product.',
     'scene': 'Show the product naturally in one suitable real-life setting.',
-    'hook': 'A strong opening image with one product benefit and a clear visual focus.',
-    'carousel_sell': 'Show one visible selling point in an attractive supporting product image.',
+    'hook': 'A strong opening image with a clear product promise, supporting explanation and visible evidence.',
+    'carousel_sell': 'Show one visible selling point in an attractive supporting product image with a complete ecommerce copy hierarchy.',
     'pain_point': 'Show a plausible usage need without exaggerated problems or results.',
-    'mechanism': 'Explain visible construction with sparse callout lines; no invented hidden parts.',
-    'benefit': 'Show one supported benefit through photography and sparse readable typography.',
+    'mechanism': 'Explain visible construction with layered callouts and supporting detail crops; no invented hidden parts.',
+    'benefit': 'Show one supported benefit through photography, a supporting explanation and readable feature labels.',
     'usage': 'Explain supported usage with a few clear steps.',
     'comparison': 'Compare only confirmed variants or visible details of this product.',
     'packaging': 'Show only packaging and included items confirmed in the references.',
@@ -86,6 +86,8 @@ def module_prompt(w, entry, index, pack, metadata, product_hint, model_scene, ad
     if brief['id'] not in pack.setdefault('template_ids', []):
         pack['template_ids'].append(brief['id'])
     art = direction or {}
+    density = str(pack.get('creative_density') or metadata.get('creative_density') or 'rich').strip().lower()
+    rich_copy = density not in {'conservative', '少文字', 'light'}
     scene = short(art.get('scene'), 180)
     camera = short(art.get('camera'), 120)
     concept = short(art.get('prompt'), 800)
@@ -125,10 +127,25 @@ def module_prompt(w, entry, index, pack, metadata, product_hint, model_scene, ad
             matching = [block for block in blocks if block.get('role') == role]
             block = matching[index % len(matching)] if matching else (blocks[index % len(blocks)] if blocks else {})
             headline = short(ad_copy if role == 'scene' and ad_copy else art.get('headline') or block.get('headline'), 80)
-            labels = [short(text, 15) for text in (block.get('labels') or [])[:2] if short(text, 15)]
+            subheadline = short(art.get('subheadline') or block.get('subheadline'), 80)
+            raw_labels = art.get('labels') if isinstance(art.get('labels'), (list, tuple)) else block.get('labels') or []
+            labels = [short(text, 18) for text in raw_labels[:4 if rich_copy else 2] if short(text, 18)]
+            cta = short(art.get('cta') or block.get('cta'), 12)
+            copy_parts = []
             if headline:
-                parts.append('Exact Chinese copy: 「' + headline + '」' + ('; labels: ' + '、'.join('「'+text+'」' for text in labels) if labels else '') + '.')
-            parts.append('Use only confirmed short copy, readable in natural scene whitespace; no repeated boxes or dense text.')
+                copy_parts.append('headline 「' + headline + '」')
+            if subheadline:
+                copy_parts.append('subheadline 「' + subheadline + '」')
+            if labels:
+                copy_parts.append('feature labels ' + '、'.join('「'+text+'」' for text in labels))
+            if cta:
+                copy_parts.append('CTA 「' + cta + '」')
+            if copy_parts:
+                parts.append('Render this exact Chinese copy with correct characters: ' + '; '.join(copy_parts) + '.')
+            if rich_copy:
+                parts.append('Use a rich but readable ecommerce hierarchy: main headline, explanatory subheadline and 2-4 evidence-bound feature callouts. Integrate text with the photography using callout lines, detail crops, layered captions, comparison columns or small icon labels as appropriate; do not reduce the design to one four-character slogan with empty space. Keep all copy together under about 50 Chinese characters.')
+            else:
+                parts.append('Use a restrained readable ecommerce hierarchy with one headline and 1-2 evidence-bound labels in natural scene whitespace.')
         else:
             parts.append('No advertising text.')
         parts.append(f'Framing variation {index+1}: one focal point, clear margins; a distinct crop from neighboring images.')

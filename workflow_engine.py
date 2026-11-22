@@ -122,6 +122,7 @@ def execute_workflow(**kwargs):
     rel = lambda path: Path(path).relative_to(project_dir).as_posix()
     prompt_pack = w.build_quality_prompt_packs(hint, style, rows, cols, model_scene, ad_copy) if strategy == "quality" else w.build_prompt_pack(hint, style, rows, cols, model_scene, ad_copy)
     prompt_pack["style"] = style
+    prompt_pack["creative_density"] = density
     skill_version = w.skill_template_version()
     if previous:
         if previous.get("skill_version") and previous["skill_version"] != skill_version:

@@ -79,6 +79,37 @@ class CompactPromptTests(unittest.TestCase):
         entry['prompt'] = 'MANUAL COPY: '+('detail ' * 400)
         self.assertIn(entry['prompt'], batch_prompt(pack, batch, [entry]))
 
+    def test_rich_detail_copy_reaches_the_actual_image_prompt(self):
+        entry = {'id': 'detail-scene-01', 'kind': 'detail', 'module_type': 'scene',
+                 'reference_indices': [1], 'render_source': 'provider'}
+        direction = {
+            'prompt': 'A warm cafe commute scene with layered ecommerce callouts.',
+            'headline': '从通勤到周末都好搭',
+            'subheadline': '自然融入日常衣橱，轻松完成多种场合穿搭',
+            'labels': ['利落立领', '顺滑拉链', '双侧口袋'],
+            'cta': '查看颜色',
+        }
+        pack = make_pack('auto', 'Warm urban fashion photography.')
+        pack['creative_density'] = 'rich'
+        prompt = module_prompt(w, entry, 0, pack, {'title': '灰色拉链外套'}, '灰色外套', True, '', [], direction)
+        self.assertIn('headline 「从通勤到周末都好搭」', prompt)
+        self.assertIn('subheadline 「自然融入日常衣橱，轻松完成多种场合穿搭」', prompt)
+        self.assertIn('「利落立领」、「顺滑拉链」、「双侧口袋」', prompt)
+        self.assertIn('CTA 「查看颜色」', prompt)
+        self.assertIn('do not reduce the design to one four-character slogan', prompt)
+        self.assertNotIn('no repeated boxes or dense text', prompt)
+
+        pack['creative_density'] = 'conservative'
+        conservative = module_prompt(w, entry, 0, pack, {'title': '灰色拉链外套'}, '灰色外套', True, '', [], direction)
+        self.assertIn('one headline and 1-2 evidence-bound labels', conservative)
+        self.assertNotIn('「双侧口袋」', conservative)
+
+        white = {'id': 'hero-01', 'kind': 'hero', 'module_type': 'white_pack',
+                 'reference_indices': [1], 'render_source': 'provider'}
+        white_prompt = module_prompt(w, white, 0, pack, {'title': '灰色拉链外套'}, '灰色外套', True, '', [], direction)
+        self.assertIn('No people, props, typography', white_prompt)
+        self.assertNotIn('从通勤到周末都好搭', white_prompt)
+
     def test_style_does_not_change_pixel_budget_counts_or_cropping_geometry(self):
         options = {'product_hint': 'test product', 'hero_count': 5, 'rows': 3, 'cols': 3,
                    'detail_modules': [{'type': 'scene', 'count': 20}], 'output_size': '2048x2048'}
