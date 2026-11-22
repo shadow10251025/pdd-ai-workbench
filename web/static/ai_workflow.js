@@ -217,7 +217,7 @@
     function settings() {
         const grid = (value('aiGrid') || '2x3').split('x').map(Number);
         const configured = {
-            product_hint:value('aiProductHint'), style:value('aiStyle') || 'minimal',
+            product_hint:value('aiProductHint'), style:value('aiStyle') || 'auto',
             rows:grid[0] || 2, cols:grid[1] || 3, strategy:value('aiStrategy') || 'grid',
             hero_count:Math.min(10,Math.max(1,Number.parseInt(value('aiHeroCount') || '6',10))),
             generation_rounds:Number.parseInt(value('aiGenerationRounds') || '0',10),
@@ -667,6 +667,7 @@
         rememberPrevious();aiResultData=null;aiSelectedFiles=[];aiFileBindings.clear();aiSizeRows.clear();aiCreativeBriefOverride=null;aiDirty=false;aiSourceChanged=false;
         localStorage.removeItem(AI_RESULT_STORAGE_KEY);
         if(typeof resetMigrateForm==='function')resetMigrateForm();
+        if($('aiStyle'))$('aiStyle').value='auto';
         ['aiSelectedColors','aiSelectedSizes','aiProductHint','aiAdCopy','aiSizeChartSpecs'].forEach(id=>{if($(id))$(id).value='';});
         if($('aiResult'))$('aiResult').style.display='none';if($('aiProgress'))$('aiProgress').style.display='none';
         if(typeof window.aiClearCreativeProposal==='function')window.aiClearCreativeProposal();
@@ -690,7 +691,7 @@
                     if($('aiHeroCount'))$('aiHeroCount').value=String(plan.hero_count||saved.main_images.length);
                     if($('aiImageSize'))$('aiImageSize').value=plan.output_size||'2048x2048';
                     if($('aiStrategy'))$('aiStrategy').value=plan.strategy||'grid';
-                    if($('aiStyle'))$('aiStyle').value=saved.style||'minimal';
+                    if($('aiStyle'))$('aiStyle').value=saved.style||'auto';
                     if($('aiAutoModulePlan'))$('aiAutoModulePlan').checked=true;
                     renderPlan(plan);
                     if(plan.module_plan_source==='user' && $('aiAutoModulePlan'))$('aiAutoModulePlan').checked=false;

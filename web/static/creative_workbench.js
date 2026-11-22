@@ -64,14 +64,21 @@
         if(!proposal)return;
         const facts=proposal.recognition||{},usage=proposal.text_requests||{};
         const prefix=stale?(photosChanged&&!api.files().length?'新照片还未完成策划，刷新后请重新选择照片。':'配置已修改，当前显示上一版策划。请更新后再生成。'):'策划已就绪，确认前不会生图。';
-        $('aiProposalStatus').textContent=`${prefix} ${facts.recognition_note||''}。${proposal.planning_note||''}。本轮策划：识图${usage.recognition||0}次、策划${usage.planning||0}次${usage.recognition_cache_hit?'（复用识图）':''}，图片请求0次。${(proposal.warnings||[]).join('；')}`;
+        const upgrade=proposal.prompt_pack.prompt_policy!=='skill-compact-v1'?'旧版方案和成品已保留；更新策划后将使用按商品自动选择的简洁提示词。':'';
+        $('aiProposalStatus').textContent=`${prefix} ${upgrade} ${facts.recognition_note||''}。${proposal.planning_note||''}。本轮策划：识图${usage.recognition||0}次、策划${usage.planning||0}次${usage.recognition_cache_hit?'（复用识图）':''}，图片请求0次。${(proposal.warnings||[]).join('；')}`;
     }
     function renderBatchPrompts(){
         if(!proposal||!$('aiProposalBatches'))return;
         const prompts=Object.fromEntries(proposal.module_outputs.map(module=>[module.id,module.prompt]));
         $('aiProposalBatches').innerHTML=(proposal.generation_plan.round_plan||[]).map(batch=>{
-            const header=proposal.prompt_pack.style_lock+`\nCreate exactly one ${batch.rows} by ${batch.cols} contact sheet. Equal-sized cells, thin #FFFFFF gutters, no content crossing cells. Output size ${batch.output_size}. Preserve each module ID's role and match each provided reference. Unused cells blank.\n`;
-            const text=header+batch.module_ids.map((id,index)=>`CELL ${index+1}:\n${prompts[id]||''}`).join('\n\n');
+            const compact=proposal.prompt_pack.prompt_policy==='skill-compact-v1';
+            const prepared=(proposal.batch_prompts||[]).find(item=>item.round===batch.round);
+            const header=compact?prepared.prompt_prefix:proposal.prompt_pack.style_lock+`\nCreate exactly one ${batch.rows} by ${batch.cols} contact sheet. Equal-sized cells, thin #FFFFFF gutters, no content crossing cells. Output size ${batch.output_size}. Preserve each module ID's role and match each provided reference. Unused cells blank.\n`;
+            const text=header+batch.module_ids.map((id,index)=>{
+                const module=proposal.module_outputs.find(item=>item.id===id),lock=proposal.prompt_pack.style_lock+'\n';
+                let prompt=prompts[id]||'';if(compact&&prompt.startsWith(lock))prompt=prompt.slice(lock.length);
+                return compact?`CELL ${index+1} [${id}], original reference photos ${JSON.stringify(module.reference_indices||[]).replaceAll(',', ', ')}:\n${prompt}`:`CELL ${index+1}:\n${prompt}`;
+            }).join('\n\n');
             return `<details><summary>第${batch.round}批 · ${batch.module_ids.length}张 · ${esc(batch.output_size)} · 1次图片请求</summary><pre>${esc(text)}</pre></details>`;
         }).join('');
     }
@@ -118,6 +125,8 @@
         if(!proposal)return;
         $('aiProposal').style.display='block';renderStatus();renderMode();
         const facts=proposal.recognition||{},metadata=proposal.metadata||{};
+        const visual=proposal.prompt_pack.visual_direction||{};
+        if($('aiVisualDirection'))$('aiVisualDirection').textContent=(proposal.options.style==='auto'?'AI 按本商品选择视觉方向：':'已指定视觉方向：')+(visual.reason||visual.summary||'依据商品与图片用途自然设计；未配置策划API时不冒充AI风格推荐。');
         $('aiRecognitionFacts').innerHTML=`<b>照片可见信息</b><p>${esc((facts.identity_evidence||[]).join('；')||'暂无AI识图证据，请配置识图服务或人工核对。')}</p><b>待确认</b><p>${esc((facts.uncertain_features||[]).join('；')||'请核对品牌、规格、材质与卖点')}</p>`;
         [['aiProposalTitle','title'],['aiProposalBrand','brand'],['aiProposalCategory','category'],['aiProposalDescription','description']].forEach(([id,key])=>{
             $(id).value=metadata[key]||'';$(id).oninput=()=>{proposal.metadata[key]=$(id).value;manualMeta[key]=$(id).value;persist();};
@@ -221,7 +230,9 @@
             if(saved?.proposal_id){
                 applying=true;proposal=saved;stale=!!saved._stale;photosChanged=!!saved._photos_changed;specsEdited=!!saved._specs_edited;refsEdited=!!saved._refs_edited;
                 manualMeta=saved._manual_metadata||{};manualPrompts=saved._manual_prompts||{};pendingBindings=saved._pending_bindings??null;
-                applyControls(stale&&saved._pending_options?saved._pending_options:saved.options,saved.generation_plan);
+                const controls=clone(stale&&saved._pending_options?saved._pending_options:saved.options);
+                if(saved.prompt_pack.prompt_policy!=='skill-compact-v1'&&pending?.proposal_id!==saved.proposal_id){controls.style='auto';stale=true;}
+                applyControls(controls,saved.generation_plan);
                 if(saved._other_specs)otherSpecs=saved._other_specs;if(saved._size_columns)$('aiSizeColumns').value=saved._size_columns;
                 renderProposal();applying=false;
             }else renderOtherSpecs();

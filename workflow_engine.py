@@ -63,66 +63,9 @@ def _reference_guard(w, metadata, indices, kind, value):
     return w._identity_guard_text(metadata, len(indices))
 
 
-def _module_prompt(w, entry, index, pack, metadata, product_hint, model_scene, ad_copy, chart_rows):
-    lock = pack["style_lock"]
-    blocks = metadata.get("creative_blocks") or []
-    scenes = metadata.get("scene_plan") or []
-    block = next((block for block in blocks if block.get("role") == entry["module_type"]), blocks[index % len(blocks)] if blocks else {})
-    scene = scenes[index % len(scenes)] if scenes else {}
-    kinds = {
-        "hook": "E-commerce infographic opening: one clear benefit headline and the full product, generous whitespace.",
-        "pain_point": "E-commerce infographic problem/use context: show a reasonable usage situation without exaggerating an unsupported problem or result.",
-        "mechanism": "E-commerce infographic construction: callout lines to visible supported parts; do not invent mechanisms, ports or hidden structure.",
-        "benefit": "E-commerce infographic benefit: one photograph with a short headline and 2-3 evidence-supported labels integrated naturally.",
-        "proof": "E-commerce infographic macro: show real visible texture, material appearance or craftsmanship, with sparse detail callouts.",
-        "angle": "An alternate evidence-supported product angle with a restrained editorial caption; no invented hidden surfaces.",
-        "carousel_sell": "E-commerce supporting carousel benefit composition with one short approved caption, no price or unverified claim.",
-        "usage": "E-commerce infographic usage: numbered steps only for observable, supported usage; avoid undocumented safety or performance promises.",
-        "scene": "E-commerce lifestyle image: natural product interaction in a suitable creative setting, with an integrated short headline.",
-        "comparison": "E-commerce infographic choice guide: compare only verified variants or visible details of this product; no fabricated competitor claims.",
-        "packaging": "E-commerce infographic packaging: show only included items and packaging visible in references; omit unconfirmed accessories.",
-        "trust_faq": "E-commerce infographic FAQ: address visible product details and seller-confirmed facts; no invented testimonials or trust badges.",
-        "closing_cta": "E-commerce editorial closing image: product and one neutral call to view options, no invented prices, offers, urgency or guarantees.",
-        "sku_preview": "Variant overview: show only the individually bound variants listed in the plan. Missing variants remain marked 待补充; never synthesize a color.",
-        "size_chart": "Verified size-chart module. All numbers and units come from the merchant rows and are rendered deterministically, not invented by the image model.",
-        "white_pack": "Pure white #FFFFFF background, complete centered product, no text, collage, props or people. Square first carousel image.",
-        "flat_lay": "Evidence-supported top-down product flat lay, no unsupported accessories, clean lighting and generous whitespace.",
-    }
-    role = entry["module_type"]
-    purpose = kinds.get(role, "An independent ecommerce product image using visible evidence.")
-    if entry["kind"] == "hero":
-        blueprints = w._category_blueprints(product_hint, "hero")
-        purpose = blueprints[index % len(blueprints)]
-        if index == 0:
-            purpose = kinds["white_pack"]
-    if entry["kind"] == "spec":
-        purpose = f"Exactly one square SKU preview for「{entry['spec_value']}」. Full physical product on #FFFFFF, no advertising text or other variants. Use only its bound reference photos."
-    template_ids, template_hints = w._template_hints(product_hint, 9, pack.get("style") or "minimal", model_scene, ad_copy)
-    template = template_hints[index % len(template_hints)] if template_hints else ""
-    entry['template_id'] = template_ids[index % len(template_ids)] if template_ids else ''
-    parts = [lock, f"MODULE {entry['id']} [{entry['label']}]. Product hint is tentative: {product_hint or 'the photographed product'}.", purpose,
-             "Skill template: " + template,
-             "Composition: one focal point, product occupies 35-45% in contextual shots and 55-65% in detail shots. Keep generous whitespace. Vary close/medium/context framing and use natural captions/callout lines instead of identical boxes."]
-    if entry["kind"] == "detail":
-        if scene:
-            parts.append("Scene/camera: " + " / ".join(str(scene.get(key) or "") for key in ("setting", "time_of_day", "camera", "lighting", "action") if scene.get(key)))
-        parts.append(f"Independent variation {index + 1}; do not repeat the same crop, background, slogan or label layout as neighboring panels.")
-        copy_lines = {key: block[key] for key in ("headline", "subheadline", "labels", "cta") if block.get(key)}
-        parts.append("Approved short copy: " + json.dumps(copy_lines, ensure_ascii=False) if copy_lines else "Use a short neutral Chinese headline about visible product details; omit unsupported copy.")
-        parts.append("Keep one readable headline, at most 2-4 short labels and under 50 Chinese characters in total. Integrate the typography in scene whitespace; no rigid repeated card.")
-    elif entry["kind"] == "hero" and role == "scene" and (model_scene or ad_copy):
-        parts.append(w._ad_scene_instruction(model_scene, ad_copy))
-    else:
-        parts.append("Clean product image: no advertising text, table, model, collage, icons or QR code.")
-    if not model_scene or entry["kind"] == "spec" or role == "white_pack":
-        parts.append("No person, face or hand in this module.")
-    elif role == "scene":
-        parts.append("Use one synthetic adult model where appropriate, generic identity, natural pose and realistic product fit, never copying a reference person's identity.")
-    parts.append(_reference_guard(w, metadata, entry.get("reference_indices") or [1], entry["kind"], entry.get("spec_value") or ""))
-    parts.append("Never add watermarks, fake logos, unverified certification, dimensions, ingredients, performance numbers, ratings, sales, medical claims or extra products. Preserve physical product color, shape and artwork. No care or washing-information panel.")
-    if role == "size_chart":
-        parts.append("EXACT MERCHANT DATA: " + json.dumps(chart_rows, ensure_ascii=False))
-    return "\n".join(parts)
+def _module_prompt(w, entry, index, pack, metadata, product_hint, model_scene, ad_copy, chart_rows, direction=None):
+    from image_prompting import module_prompt
+    return module_prompt(w, entry, index, pack, metadata, product_hint, model_scene, ad_copy, chart_rows, direction)
 
 
 def execute_workflow(**kwargs):
@@ -229,9 +172,10 @@ def execute_workflow(**kwargs):
         combinations *= len(values)
     if combinations > 200:
         raise w.WorkflowError("规格组合超过200个，请减少已选规格后再生成")
-    w._inject_identity_guard_prompt(prompt_pack, metadata, len(images))
-    w._inject_creative_brief_prompt(prompt_pack, metadata)
-    w._inject_detail_module_prompt(prompt_pack, plan["detail_module_plan"], w._flag(kwargs.get("size_chart_enabled")), size_chart_rows, w._selected_variant_values(metadata.get("specs_confirmed") or {}))
+    if prompt_pack.get("prompt_policy") != "skill-compact-v1":
+        w._inject_identity_guard_prompt(prompt_pack, metadata, len(images))
+        w._inject_creative_brief_prompt(prompt_pack, metadata)
+        w._inject_detail_module_prompt(prompt_pack, plan["detail_module_plan"], w._flag(kwargs.get("size_chart_enabled")), size_chart_rows, w._selected_variant_values(metadata.get("specs_confirmed") or {}))
     entries = copy.deepcopy(plan["module_outputs"])
     for index, entry in enumerate(entries):
         if not (approved or (previous or {}).get('approved')):

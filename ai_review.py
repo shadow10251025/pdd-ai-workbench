@@ -178,6 +178,16 @@ def regenerate_module(
             "Use natural readable Chinese typography only where this module permits it. Never invent a brand, material, measurement, claim or a different colorway.",
             f"Revision direction {revised['revision']}: create a fresh composition while keeping the campaign style and product identity.",
         ])
+        if (revised.get('prompt_pack') or {}).get('prompt_policy') == 'skill-compact-v1':
+            # Keep the approved art direction; don't re-expand it into the
+            # legacy identity checklist or repeat the shared style paragraph.
+            prefix = style_lock+'\n'
+            body = requested_prompt[len(prefix):] if requested_prompt.startswith(prefix) else requested_prompt
+            final_prompt = '\n'.join([
+                style_lock, body,
+                'Create exactly ONE standalone image, no grid or inset reference. Match the supplied product photos; no changed parts, colors or unsupported claims.',
+                f'Fresh revision {revised["revision"]}: preserve product identity; adapt the composition naturally.',
+            ])
         if target.get("kind") in {"hero", "spec", "sku"}:
             final_prompt += "\nOutput one square 1:1 image; no table, contact sheet or inset reference photo."
             if target.get("kind") != "hero" or target.get("module_type") != "scene":

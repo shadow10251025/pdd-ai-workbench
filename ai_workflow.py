@@ -1535,6 +1535,9 @@ def _limit_creative_brief(metadata: dict[str, Any], density: str = "rich", produ
 def build_campaign_style_lock(style: str = "minimal") -> str:
     """返回固定文本，确保批量图的风格不漂移。"""
     style = (style or "minimal").strip().lower()
+    if style == "auto":
+        from image_prompting import style_direction
+        return style_direction("auto")
     # Accept the labels used by the UI as well as common API callers.  Unknown
     # labels intentionally fall back to minimal instead of creating a partially
     # specified palette that can drift between hero and detail requests.

@@ -10,7 +10,7 @@ import re
 def build_plan(**options):
     import ai_workflow as w
     hint = options.get("product_hint") or ""
-    style = options.get("style") or "minimal"
+    style = options.get("style") or "auto"
     rows = max(1, min(int(options.get("rows") or 3), 4))
     cols = max(1, min(int(options.get("cols") or 3), 4))
     hero_count = int(options.get("hero_count", 6))

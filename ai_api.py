@@ -29,7 +29,7 @@ def _json(value, fallback=None):
 
 class PlanRequest(BaseModel):
     product_hint: str = ""
-    style: str = "minimal"
+    style: str = "auto"
     rows: int = Field(3, ge=1, le=4)
     cols: int = Field(3, ge=1, le=4)
     strategy: str = "grid"
@@ -245,7 +245,7 @@ def install_ai_routes(app, project_dir: Path, require_license: Callable, bg_task
         if not isinstance(options,dict):raise HTTPException(422,'策划设置格式错误')
         try:
             validated=PlanRequest.model_validate(options).model_dump(exclude={'reference_count'})
-            if validated['style'] not in {'minimal','fresh','luxury','tech'}:raise WorkflowError('请选择已支持的视觉风格')
+            if validated['style'] not in {'auto','minimal','fresh','luxury','tech'}:raise WorkflowError('请选择已支持的视觉风格')
             validated.update(model_scene=_flag(options.get('model_scene')),size_chart_only_selected=_flag(options.get('size_chart_only_selected'),True),specs_user_modified=_flag(options.get('specs_user_modified')),variant_references_user_modified=_flag(options.get('variant_references_user_modified')),
                              ad_copy=str(options.get('ad_copy') or '')[:160],creative_density='conservative' if options.get('creative_density')=='conservative' else 'rich',merchant_metadata=merchant_metadata(options.get('merchant_metadata')))
             manual=options.get('manual_prompts') or {}
@@ -310,7 +310,7 @@ def install_ai_routes(app, project_dir: Path, require_license: Callable, bg_task
     @router.post("/api/ai/workflow")
     async def workflow(
         images: list[UploadFile] = File(default=[]), image: UploadFile | None = File(default=None),
-        product_hint: str = Form(""), style: str = Form("minimal"), rows: int = Form(3), cols: int = Form(3),
+        product_hint: str = Form(""), style: str = Form("auto"), rows: int = Form(3), cols: int = Form(3),
         strategy: str = Form("grid"), generation_rounds: int = Form(0), round_strategy: str = Form("auto"),
         model_scene: str = Form("0"), ad_copy: str = Form(""), creative_density: str = Form("rich"),
         creative_brief_override: str = Form(""), detail_modules: str = Form(""), detail_modules_json: str = Form(""),

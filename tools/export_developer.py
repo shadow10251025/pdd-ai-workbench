@@ -5,13 +5,15 @@ import json
 import re
 import shutil
 import zipfile
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 ROOT_FILES = {
     'admin_core.py', 'ai_api.py', 'ai_review.py', 'ai_service.py',
     'ai_workflow.py', 'asset_store.py', 'core_planner.py', 'creative_proposal.py',
-    'image_recrop.py', 'launcher.py', 'launcher_admin.py', 'license.py',
+    'image_prompting.py', 'image_recrop.py', 'launcher.py', 'launcher_admin.py', 'license.py',
     'listing_readback.py', 'local_drafts.py', 'local_security.py',
     'maintenance.py', 'one_click.py', 'one_click_list.py', 'product_package.py',
     'rental_server.py', 'resource_limits.py', 'run_local.py', 'run_dev.py',
@@ -96,7 +98,7 @@ def export(destination, legacy_archive=None):
     manifest = {p.relative_to(destination).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(destination.rglob('*')) if p.is_file()}
     (destination/'SOURCE_MANIFEST.json').write_text(json.dumps({
-        'schema_version': 1, 'date': '2026-10-28', 'files': manifest,
+        'schema_version': 1, 'date': datetime.now(ZoneInfo('Asia/Singapore')).date().isoformat(), 'files': manifest,
         'excluded': ['runtime data', 'production credentials', 'browser profiles', 'old archives', 'one-off probes'],
     }, indent=2), 'utf-8')
     return {'destination': str(destination), 'files': len(manifest)+1,

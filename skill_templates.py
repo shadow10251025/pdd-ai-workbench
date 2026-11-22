@@ -68,3 +68,32 @@ def compile_hint(root, template_id, *, product, category, style, model_scene=Fal
         parts.append("anti-AI realism: " + expand(data["anti_ai_tips"]))
     parts.append("Template guidance yields to this module's explicit role, campaign style and reference evidence; no conflicting inherited layout, product facts or typography.")
     return "; ".join(parts)
+
+
+def brief(root, template_id):
+    """Read just the matching pinned template, omitting unset variables/claims.
+
+    Generic category tips can suggest invented certification, care or measures;
+    they are not product facts. Creative roles decide their own layout.
+    """
+    from ai_workflow import WorkflowError
+    path = next((path for path in Path(root).glob('*.json') if path.stem.endswith(template_id)), None)
+    if path is None:
+        raise WorkflowError('电商Skill缺少模板'+template_id)
+    try:
+        raw = path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != _lock().get('files', {}).get(path.name):
+            raise WorkflowError('电商Skill模板已变更，请恢复锁定版本', 'template_version_changed')
+        data = json.loads(raw)
+    except (OSError, ValueError) as exc:
+        raise WorkflowError('电商Skill模板读取失败') from exc
+    fields = data.get('prompt_template') or {}
+    defaults = data.get('defaults') or {}
+    result = {'id': data['id'], 'name': data.get('name', template_id)}
+    for key in ('type', 'lighting', 'composition', 'camera', 'skin_detail'):
+        value = fields.get(key) or defaults.get(key)
+        if value and re.search(r'\{[^{}]+\}', str(value)):
+            value = defaults.get(key, '')
+        if isinstance(value, str) and not re.search(r'\{[^{}]+\}', value):
+            result[key] = value
+    return result

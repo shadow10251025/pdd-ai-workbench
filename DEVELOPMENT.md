@@ -18,6 +18,7 @@ AI Key由商家在页面临时填写；不需要复制业主的 `.env`。`.env.e
 | `web/static/module_examples.js` | 12类本地模块示例，无API请求 |
 | `web/app.py` | 本地接口、完整草稿、店铺选择及填表前校验 |
 | `creative_proposal.py` | 识图与策划结果、模板提示词、商家编辑和方案确认 |
+| `image_prompting.py` | 简洁模块提示词、按商品自动视觉方向、批次共用规则去重；不处理裁切几何 |
 | `core_planner.py`、`workflow_engine.py` | 数量、稳定模块编号、像素预算、批次和执行 |
 | `ai_api.py`、`task_store.py` | API、持久化任务、幂等、取消/恢复及请求记录 |
 | `ai_workflow.py`、`skill_templates.py` | 生图适配、参考图、缓存和锁定Skill模板 |
@@ -44,6 +45,8 @@ AI Key由商家在页面临时填写；不需要复制业主的 `.env`。`.env.e
 本地写请求先调用 `GET /api/session`，再带 `X-PDD-Session`。页面公共请求封装会自动处理；重启服务后刷新页面获取新令牌。线上租赁服务使用其独立认证及CSRF约定，不能直接复用桌面权限。
 
 商品和图片使用 `ProductPackage`、稳定SKU及模块编号关联。`detail_modules=[]` 是主动取消全部，不能被当成未填写。价格、库存0、编码和启用状态按SKU编号合并。缺少颜色实物参考时不允许拿普通详情图补位。
+
+新方案的 `prompt_pack.prompt_policy=skill-compact-v1`。`style=auto` 允许策划AI给出任意适合本商品的 `visual_direction.summary/reason`，不映射回四个固定风格。首图与SKU的白底属于用途要求。`skill_templates.brief` 仅加载每个用途实际匹配的锁定模板，省略空变量和不适用于本商品的类目营销提示。模板未升级，固定25个模板的哈希仍会验证。旧版通用预览构造函数保留供兼容；新页面以prepare返回的模块和批次提示词为准，执行、预览、单图重生使用同一套简洁约定。
 
 ## 测试和交付
 

@@ -33,6 +33,7 @@ with sync_playwright() as p:
     page.on('dialog',lambda dialog:(dialogs.append(dialog.message),dialog.accept()))
     page.on('request',lambda request:requests.append(request.url) if '/api/ai/confirm' in request.url else None)
     page.goto(BASE_URL+'/'); page.wait_for_load_state('networkidle')
+    assert page.locator('#aiStyle').input_value()=='auto'
     assert page.locator('.ai-module-example-button').count()==12
     page.locator('.ai-module-choice[data-module="feature_macro"]').locator('..').locator('.ai-module-example-button').click()
     assert page.locator('#moduleExampleDialog').is_visible()
@@ -76,11 +77,16 @@ with sync_playwright() as p:
     assert page.locator('#aiProposalTitle').input_value()=='离线流程验收样例 - 请勿发布'
     assert '主图 2 张' in page.locator('#aiPlanSummary').inner_text()
     assert not requests
+    expected_batches=page.locator('#aiProposalBatches pre').all_text_contents()
+    assert expected_batches and all(text.count('Campaign Style Lock:')==1 for text in expected_batches)
     page.locator('#aiGenerateButton').click()
     page.wait_for_function("() => { const r=window.aiGetProductPackage();return r && r.module_outputs && r.module_outputs.length===4; }",timeout=30000)
     package=page.evaluate('window.aiGetProductPackage()')
     assert package['generation_kind']=='offline_demo'
     assert package['confirmed_before_generation'] is True
+    assert package['prompt_pack']['prompt_policy']=='skill-compact-v1'
+    assert package['prompt_pack']['visual_direction']['mode']=='auto'
+    assert {row['batch_prompt'] for row in package['module_outputs'] if row['render_source']=='provider'}==set(expected_batches)
     assert package['module_outputs'][0]['prompt'].startswith('MERCHANT CONFIRMED PROMPT:')
     assert len(package['main_images'])==2 and len(package['detail_images'])==1 and len(package['spec_images'])==1
     assert len(requests)==1 and all(sku['stock']==0 for sku in package['skus'])
@@ -106,6 +112,12 @@ with sync_playwright() as p:
     page.reload(); page.wait_for_load_state('networkidle')
     restored=page.evaluate("JSON.parse(localStorage.getItem('currentProductPackage'))")
     assert restored['sku'][0]['stock']==0
+    page.evaluate("() => {const saved=JSON.parse(localStorage.getItem('aiCreativeProposalV1'));delete saved.prompt_pack.prompt_policy;saved.options.style='minimal';saved._stale=false;localStorage.setItem('aiCreativeProposalV1',JSON.stringify(saved));}")
+    page.reload();page.wait_for_load_state('networkidle')
+    assert page.locator('#aiStyle').input_value()=='auto'
+    assert '更新策划' in page.locator('#aiGenerateButton').inner_text()
+    assert '旧版方案和成品已保留' in page.locator('#aiProposalStatus').inner_text()
+    assert len(page.evaluate('window.aiGetProductPackage().module_outputs'))==4
     page.set_viewport_size({'width':390,'height':844});page.locator('.nav-item[data-tab="ai"]').click();page.wait_for_timeout(150)
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth+2')
     page.screenshot(path=str(OUTPUT/'workbench-mobile.png'))

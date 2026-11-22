@@ -75,6 +75,22 @@ class ModuleReviewTests(unittest.TestCase):
             with Image.open(path) as image:
                 self.assertEqual(image.width, image.height)
 
+    def test_compact_revision_reuses_direction_without_repeating_style(self):
+        from image_prompting import make_pack
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.package(root)
+            source['prompt_pack'] = make_pack('auto', 'Relaxed editorial product photography.')
+            prompt = source['prompt_pack']['style_lock']+'\nKeep this exact merchant art direction.'
+            persist_review_package(root, source)
+            with patch.dict(os.environ, {'PDD_AI_PROVIDER':'mock','PDD_IMAGE_API_URL':'','PDD_IMAGE_API_KEY':''}), patch('ai_workflow.generate_sheet', side_effect=self.fake_sheet) as generate:
+                regenerate_module(root, source['job_id'], 'detail_001', prompt)
+            actual = generate.call_args.args[1]
+            self.assertEqual(actual.count('Campaign Style Lock:'), 1)
+            self.assertIn('Keep this exact merchant art direction.', actual)
+            self.assertIn('exactly ONE standalone image', actual)
+            self.assertLess(len(actual), 1000)
+
     def test_size_chart_revision_does_not_call_image_provider(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
